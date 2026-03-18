@@ -6,6 +6,10 @@ let db
 export async function connectDB() {
   if (db) return db
 
+  if (!process.env.MONGODB_URI) {
+    throw new Error('MONGODB_URI environment variable is not set')
+  }
+
   client = new MongoClient(process.env.MONGODB_URI)
   await client.connect()
   db = client.db(process.env.MONGODB_DB_NAME || 'moneyline')
