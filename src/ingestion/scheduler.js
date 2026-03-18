@@ -182,11 +182,12 @@ export function startScheduler() {
     const offset = index * 2
 
     // Scores: every 10 min, staggered
-    cron.schedule(`${offset},${offset + 10},${offset + 20},${offset + 30},${offset + 40},${offset + 50} * * * *`, () => jobScores(config))
+    const scoreMins = Array.from({ length: 6 }, (_, i) => (offset + i * 10) % 60).join(',')
+    cron.schedule(`${scoreMins} * * * *`, () => jobScores(config))
 
     // Odds: every 10 min, staggered (offset by 5 from scores)
-    const oddsOffset = offset + 5
-    cron.schedule(`${oddsOffset},${oddsOffset + 10},${oddsOffset + 20},${oddsOffset + 30},${oddsOffset + 40},${oddsOffset + 50} * * * *`, () => jobOdds(config))
+    const oddsMins = Array.from({ length: 6 }, (_, i) => (offset + 5 + i * 10) % 60).join(',')
+    cron.schedule(`${oddsMins} * * * *`, () => jobOdds(config))
 
     // Standings: every 6 hours
     cron.schedule(`${offset} */6 * * *`, () => jobStandings(config))
