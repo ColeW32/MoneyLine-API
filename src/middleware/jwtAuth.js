@@ -3,8 +3,16 @@ import { getCollection } from '../db.js'
 import { error } from '../utils/response.js'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
-const JWKS_URL = `${SUPABASE_URL}/auth/v1/.well-known/jwks.json`
-const JWKS = createRemoteJWKSet(new URL(JWKS_URL))
+
+// Lazily initialised — avoids crash on startup if SUPABASE_URL is not yet set
+let _jwks
+function getJWKS() {
+  if (!_jwks) {
+    if (!SUPABASE_URL) throw new Error('SUPABASE_URL is not configured')
+    _jwks = createRemoteJWKSet(new URL(`${SUPABASE_URL}/auth/v1/.well-known/jwks.json`))
+  }
+  return _jwks
+}
 
 /**
  * Verify Supabase JWT via JWKS and auto-provision a MongoDB user record.
@@ -19,7 +27,7 @@ export async function verifyJwt(request, reply) {
 
   try {
     const token = header.slice(7)
-    const { payload } = await jwtVerify(token, JWKS, {
+    const { payload } = await jwtVerify(token, getJWKS(), {
       issuer: `${SUPABASE_URL}/auth/v1`,
     })
 
