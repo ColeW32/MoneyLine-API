@@ -42,9 +42,9 @@ export default function AuthenticationPage() {
       <CodeBlock
         title="Authenticated request"
         code={{
-          curl: `curl -H "x-api-key: ml_live_abc123..." \\\n  https://api.moneylineapi.com/v1/events/today`,
-          javascript: `const res = await fetch("https://api.moneylineapi.com/v1/events/today", {\n  headers: { "x-api-key": "ml_live_abc123..." }\n})`,
-          python: `import requests\n\nres = requests.get("https://api.moneylineapi.com/v1/events/today",\n  headers={"x-api-key": "ml_live_abc123..."})`,
+          curl: `curl -H "x-api-key: ml_live_abc123..." \\\n  https://mlapi.bet/v1/events/today`,
+          javascript: `const res = await fetch("https://mlapi.bet/v1/events/today", {\n  headers: { "x-api-key": "ml_live_abc123..." }\n})`,
+          python: `import requests\n\nres = requests.get("https://mlapi.bet/v1/events/today",\n  headers={"x-api-key": "ml_live_abc123..."})`,
         }}
       />
 

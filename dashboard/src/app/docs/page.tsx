@@ -16,7 +16,7 @@ export default function DocsPage() {
       <p className="text-[15px] text-[#4a4a4a] leading-relaxed mb-2">
         All requests go through a single base URL:
       </p>
-      <CodeBlock code="https://api.moneylineapi.com/v1" />
+      <CodeBlock code="https://mlapi.bet/v1" />
 
       <h2 className="text-xl font-semibold ml-text mt-10 mb-3">Get Your API Key</h2>
       <ol className="list-decimal list-inside space-y-1.5 text-[15px] text-[#4a4a4a] leading-relaxed">
@@ -43,11 +43,11 @@ export default function DocsPage() {
       <CodeBlock
         title="Get today's events"
         code={{
-          curl: 'curl -H "x-api-key: YOUR_API_KEY" https://api.moneylineapi.com/v1/events/today',
+          curl: 'curl -H "x-api-key: YOUR_API_KEY" https://mlapi.bet/v1/events/today',
           javascript:
-            'const res = await fetch("https://api.moneylineapi.com/v1/events/today", {\n  headers: { "x-api-key": "YOUR_API_KEY" }\n})\nconst data = await res.json()',
+            'const res = await fetch("https://mlapi.bet/v1/events/today", {\n  headers: { "x-api-key": "YOUR_API_KEY" }\n})\nconst data = await res.json()',
           python:
-            'import requests\n\nres = requests.get("https://api.moneylineapi.com/v1/events/today",\n  headers={"x-api-key": "YOUR_API_KEY"})\ndata = res.json()',
+            'import requests\n\nres = requests.get("https://mlapi.bet/v1/events/today",\n  headers={"x-api-key": "YOUR_API_KEY"})\ndata = res.json()',
         }}
       />
 

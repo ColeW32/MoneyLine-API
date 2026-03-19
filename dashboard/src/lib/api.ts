@@ -1,6 +1,6 @@
 import { supabase } from './supabase'
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:3000'
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://mlapi.bet'
 
 interface ApiResponse<T = unknown> {
   success: boolean

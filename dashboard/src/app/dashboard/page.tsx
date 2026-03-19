@@ -76,7 +76,7 @@ export default function DashboardOverview() {
         <h2 className="text-white font-semibold text-sm mb-4">Quick Start</h2>
         <pre className="bg-[#0a0b0f] border border-white/5 rounded-lg p-4 text-sm overflow-x-auto">
           <code className="text-zinc-300">
-{`curl https://api.moneylineapi.com/v1/events/today \\
+{`curl https://mlapi.bet/v1/events/today \\
   -H "x-api-key: ${firstKey?.keyPrefix || 'YOUR_API_KEY'}••••••••••••••••••••••••"`}
           </code>
         </pre>

@@ -100,7 +100,7 @@ function colorize(line: string) {
       if (part.startsWith('"x-api-key') || part.startsWith('"Content-Type') || part.startsWith('"Authorization')) {
         return <span key={i} className="text-[#fb923c]">{part}</span>
       }
-      if (part.includes('/v1/') || part.includes('http') || part.includes('api.moneylineapi.com')) {
+      if (part.includes('/v1/') || part.includes('http') || part.includes('mlapi.bet')) {
         return <span key={i} className="text-[#86efac]">{part}</span>
       }
       return <span key={i} className="text-[#fb923c]">{part}</span>
