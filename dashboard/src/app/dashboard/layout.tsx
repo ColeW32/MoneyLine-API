@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/auth'
+import { TIER_LABELS } from '@/lib/constants'
 import { useEffect, useState } from 'react'
 
 const NAV = [
@@ -132,9 +133,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <div className="flex-1 flex flex-col h-screen">
         {/* Top bar */}
         <div className="h-12 shrink-0 flex items-center justify-end gap-3 px-6">
-          <span className="text-xs font-medium bg-[#1a1a1a] text-white px-2.5 py-1 rounded-full uppercase tracking-wide">
-            {user.tier}
-          </span>
+          <Link
+            href="/dashboard/plan"
+            className="text-xs font-medium bg-[#1a1a1a] text-white px-2.5 py-1 rounded-full uppercase tracking-wide hover:bg-[#2a2a2a] transition-colors cursor-pointer"
+          >
+            {TIER_LABELS[user.tier] || user.tier}
+          </Link>
           <span className="text-sm text-[#6b7280]">{user.email}</span>
         </div>
 

@@ -12,7 +12,16 @@ export default async function manageRoutes(fastify) {
 
   fastify.get('/auth/me', { preHandler: verifyJwt }, async (request) => {
     const { supabaseId, email, tier, createdAt } = request.user
-    return success({ id: supabaseId, email, tier, createdAt })
+    // Fetch billing fields from user doc
+    const userDoc = await getCollection('users').findOne({ supabaseId })
+    return success({
+      id: supabaseId,
+      email,
+      tier,
+      createdAt,
+      autoUpgrade: userDoc?.autoUpgrade !== false,
+      cardOnFile: userDoc?.cardOnFile || false,
+    })
   })
 
   // ──────────────────────── API Key Management ──────────────────────

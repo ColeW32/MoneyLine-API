@@ -57,6 +57,8 @@ async function fetchUserFromApi(token: string): Promise<Partial<AppUser>> {
     if (data.success && data.data) {
       return {
         tier: data.data.tier || 'free',
+        autoUpgrade: data.data.autoUpgrade !== false,
+        cardOnFile: data.data.cardOnFile || false,
       }
     }
   } catch {
