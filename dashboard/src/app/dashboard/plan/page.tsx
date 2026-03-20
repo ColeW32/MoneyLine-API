@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { getPlan, updateAutoUpgrade, type PlanData } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
-import { TIER_PRICES, TIER_CREDITS } from '@/lib/constants'
+import { TIER_PRICES, TIER_CREDITS, TIER_LABELS, TIER_ORDER } from '@/lib/constants'
 
 /** Format a date as "March 31, 2026" */
 function formatDate(dateStr: string) {
@@ -14,11 +14,19 @@ function formatDate(dateStr: string) {
   })
 }
 
+/** Animated shimmer bar for skeleton loading */
+function Shimmer({ className = '' }: { className?: string }) {
+  return (
+    <div className={`bg-white/5 rounded animate-pulse ${className}`} />
+  )
+}
+
 export default function PlanPage() {
   const { user, refreshUser } = useAuth()
   const [plan, setPlan] = useState<PlanData | null>(null)
   const [autoUpgrade, setAutoUpgrade] = useState(true)
   const [toggling, setToggling] = useState(false)
+  const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
     getPlan()
@@ -27,6 +35,7 @@ export default function PlanPage() {
         setAutoUpgrade(r.data.autoUpgrade)
       })
       .catch(() => {})
+      .finally(() => setLoaded(true))
   }, [])
 
   async function handleAutoUpgradeToggle() {
@@ -145,49 +154,76 @@ export default function PlanPage() {
     )
   }
 
+  /** Skeleton version of a tier card — matches real card dimensions */
+  function renderTierSkeleton(id: string) {
+    return (
+      <div key={id} className="rounded-xl border border-white/5 bg-[#1a1d27] p-5">
+        <Shimmer className="h-4 w-16 mb-2" />
+        <Shimmer className="h-7 w-20 mb-1" />
+        <Shimmer className="h-3 w-24 mb-4" />
+        <div className="space-y-2">
+          {features.map((f) => (
+            <div key={f.key} className="flex justify-between">
+              <Shimmer className="h-3 w-20" />
+              <Shimmer className="h-3 w-12" />
+            </div>
+          ))}
+        </div>
+        <Shimmer className="h-9 w-full mt-4 rounded-lg" />
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-white">Plan & Billing</h1>
 
-      {/* Credit usage summary */}
-      {plan && (
-        <div className="bg-[#1a1d27] rounded-xl border border-white/5 p-5">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-xs text-zinc-400 font-medium">Credit Usage This Period</p>
-            {plan.billingCycleEnd && (
-              <p className="text-xs text-zinc-500">
-                Resets {formatDate(plan.billingCycleEnd)}
-              </p>
-            )}
-          </div>
-          <div className="text-2xl font-bold text-white">
-            {creditsUsed.toLocaleString()}
-            <span className="text-sm text-zinc-500 font-normal ml-1">
-              / {isUnlimited ? '∞' : creditsLimit.toLocaleString()} credits
-            </span>
-          </div>
-          <div className="mt-3 h-1.5 bg-white/5 rounded-full overflow-hidden">
-            <div
-              className={`h-full rounded-full transition-all ${
-                usagePct > 90 ? 'bg-red-400' : usagePct > 70 ? 'bg-yellow-400' : 'bg-[#e8ff47]'
-              }`}
-              style={{ width: `${usagePct}%` }}
-            />
-          </div>
-          {plan.overageCredits > 0 && (
-            <div className="mt-2 flex items-center justify-between">
-              <p className="text-xs text-yellow-400">
-                {plan.overageCredits.toLocaleString()} overage credits
-              </p>
-              <p className="text-xs text-yellow-400">
-                Overage cost: ${plan.overageCost.toFixed(2)}
-              </p>
-            </div>
+      {/* Credit usage summary — skeleton when loading */}
+      <div className="bg-[#1a1d27] rounded-xl border border-white/5 p-5">
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-xs text-zinc-400 font-medium">Credit Usage This Period</p>
+          {plan?.billingCycleEnd ? (
+            <p className="text-xs text-zinc-500">Resets {formatDate(plan.billingCycleEnd)}</p>
+          ) : (
+            <Shimmer className="h-3 w-32" />
           )}
         </div>
-      )}
+        {plan ? (
+          <>
+            <div className="text-2xl font-bold text-white">
+              {creditsUsed.toLocaleString()}
+              <span className="text-sm text-zinc-500 font-normal ml-1">
+                / {isUnlimited ? '∞' : creditsLimit.toLocaleString()} credits
+              </span>
+            </div>
+            <div className="mt-3 h-1.5 bg-white/5 rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all ${
+                  usagePct > 90 ? 'bg-red-400' : usagePct > 70 ? 'bg-yellow-400' : 'bg-[#e8ff47]'
+                }`}
+                style={{ width: `${usagePct}%` }}
+              />
+            </div>
+            {plan.overageCredits > 0 && (
+              <div className="mt-2 flex items-center justify-between">
+                <p className="text-xs text-yellow-400">
+                  {plan.overageCredits.toLocaleString()} overage credits
+                </p>
+                <p className="text-xs text-yellow-400">
+                  Overage cost: ${plan.overageCost.toFixed(2)}
+                </p>
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            <Shimmer className="h-7 w-48 mb-3" />
+            <div className="h-1.5 bg-white/5 rounded-full" />
+          </>
+        )}
+      </div>
 
-      {/* Auto-upgrade toggle */}
+      {/* Auto-upgrade + payment method section */}
       <div className="bg-[#1a1d27] rounded-xl border border-white/5 p-5">
         <div className="flex items-center justify-between">
           <div>
@@ -210,17 +246,40 @@ export default function PlanPage() {
             />
           </button>
         </div>
-        {autoUpgrade && !hasCard && (
-          <div className="mt-3 bg-[#e8ff47]/5 border border-[#e8ff47]/20 rounded-lg px-4 py-3 flex items-center gap-3">
-            <svg className="w-4 h-4 text-[#e8ff47] flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <p className="text-sm text-zinc-300">
-              <span className="font-medium text-[#e8ff47]">Recommended:</span>{' '}
-              Add a payment method so auto-upgrade can activate seamlessly when you hit your limit.
-            </p>
+
+        {/* Payment method CTA — shown when auto-upgrade is on but no card */}
+        {autoUpgrade && !hasCard && loaded && (
+          <div className="mt-4 bg-gradient-to-r from-[#e8ff47]/[0.06] to-[#e8ff47]/[0.02] border border-[#e8ff47]/15 rounded-xl p-5">
+            <div className="flex items-start gap-4">
+              {/* Card icon */}
+              <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-[#e8ff47]/10 flex items-center justify-center">
+                <svg className="w-5 h-5 text-[#e8ff47]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" />
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-3 mb-1">
+                  <h4 className="text-white font-semibold text-sm">Add a payment method</h4>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-[#e8ff47] bg-[#e8ff47]/10 px-2 py-0.5 rounded-full">
+                    $0.00 due today
+                  </span>
+                </div>
+                <p className="text-xs text-zinc-400 leading-relaxed">
+                  You won&apos;t be charged until you upgrade or exceed your credit limit.
+                  Adding a card now ensures auto-upgrade can activate seamlessly — no interruptions to your API access.
+                </p>
+                <button className="mt-3 inline-flex items-center gap-2 bg-[#e8ff47] text-[#1a1a1a] text-sm font-semibold px-5 py-2 rounded-lg hover:bg-[#d4eb3f] transition-colors">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                  </svg>
+                  Add payment method
+                </button>
+              </div>
+            </div>
           </div>
         )}
+
+        {/* Warning when auto-upgrade is off */}
         {!autoUpgrade && (
           <div className="mt-3 bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-3">
             <p className="text-sm text-red-400">
@@ -231,18 +290,22 @@ export default function PlanPage() {
       </div>
 
       {/* Tier card grid — 3 on top, 2 on bottom, stacks responsively */}
-      {plan && (
-        <div className="space-y-4">
-          {/* Row 1: Free, Starter, Pro */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {topRow.map(renderTierCard)}
-          </div>
-          {/* Row 2: Business, Enterprise */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {bottomRow.map(renderTierCard)}
-          </div>
+      <div className="space-y-4">
+        {/* Row 1: Free, Starter, Pro */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {plan
+            ? topRow.map(renderTierCard)
+            : ['free', 'starter', 'pro'].map(renderTierSkeleton)
+          }
         </div>
-      )}
+        {/* Row 2: Business, Enterprise */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {plan
+            ? bottomRow.map(renderTierCard)
+            : ['business', 'enterprise'].map(renderTierSkeleton)
+          }
+        </div>
+      </div>
 
       {/* Enterprise CTA for Business tier users */}
       {currentTier === 'business' && (
