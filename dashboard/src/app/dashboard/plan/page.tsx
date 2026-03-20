@@ -33,15 +33,16 @@ export default function PlanPage() {
     setToggling(false)
   }
 
+  // Note: Infinity becomes null after JSON serialization from the API
   const features = [
-    { key: 'creditsPerMonth', label: 'Credits / month', format: (v: number) => v === Infinity ? 'Unlimited' : v.toLocaleString() },
-    { key: 'requestsPerMinute', label: 'Rate limit / min', format: (v: number) => v === Infinity ? 'Unlimited' : String(v) },
-    { key: 'sports', label: 'Sports access', format: (v: string | string[]) => v === 'all' ? 'All sports' : Array.isArray(v) ? v.join(', ').toUpperCase() : String(v) },
-    { key: 'edgeAccess', label: 'Edge data (arb, EV)', format: (v: boolean) => v ? 'Yes' : '—' },
-    { key: 'playByPlay', label: 'Play-by-play', format: (v: boolean) => v ? 'Yes' : '—' },
-    { key: 'injuryAccess', label: 'Injury reports', format: (v: boolean) => v ? 'Yes' : '—' },
-    { key: 'booksPerRequest', label: 'Sportsbooks per request', format: (v: number) => v === 0 ? '—' : v === Infinity ? 'All' : String(v) },
-    { key: 'historicalDays', label: 'Historical data', format: (v: number) => v === Infinity ? 'Unlimited' : `${v} days` },
+    { key: 'creditsPerMonth', label: 'Credits / month', format: (v: number | null) => v == null || v === Infinity ? 'Unlimited' : v.toLocaleString() },
+    { key: 'requestsPerMinute', label: 'Rate limit / min', format: (v: number | null) => v == null || v === Infinity ? 'Unlimited' : String(v) },
+    { key: 'sports', label: 'Sports access', format: (v: string | string[] | null) => v === 'all' ? 'All sports' : Array.isArray(v) ? v.join(', ').toUpperCase() : v ? String(v) : '—' },
+    { key: 'edgeAccess', label: 'Edge data (arb, EV)', format: (v: boolean | null) => v ? 'Yes' : '—' },
+    { key: 'playByPlay', label: 'Play-by-play', format: (v: boolean | null) => v ? 'Yes' : '—' },
+    { key: 'injuryAccess', label: 'Injury reports', format: (v: boolean | null) => v ? 'Yes' : '—' },
+    { key: 'booksPerRequest', label: 'Sportsbooks per request', format: (v: number | null) => v === 0 ? '—' : v == null || v === Infinity ? 'All' : String(v) },
+    { key: 'historicalDays', label: 'Historical data', format: (v: number | null) => v == null || v === Infinity ? 'Unlimited' : `${v} days` },
   ]
 
   const currentTier = user?.tier || 'free'
