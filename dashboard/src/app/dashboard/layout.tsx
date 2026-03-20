@@ -143,6 +143,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
 
           <div className="flex items-center gap-3">
+            <a
+              href="https://www.moneylineapp.com/docs"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-[#6b7280] hover:text-[#1a1a1a] transition-colors"
+            >
+              Documentation
+            </a>
             <Link
               href="/dashboard/plan"
               className="text-xs font-medium bg-[#1a1a1a] text-white px-2.5 py-1 rounded-full uppercase tracking-wide hover:bg-[#2a2a2a] transition-colors cursor-pointer"
