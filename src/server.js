@@ -1,4 +1,7 @@
 import 'dotenv/config'
+import { readFileSync } from 'fs'
+import { fileURLToPath } from 'url'
+import { dirname, join } from 'path'
 import Fastify from 'fastify'
 import cors from '@fastify/cors'
 import helmet from '@fastify/helmet'
@@ -77,6 +80,13 @@ await fastify.register(edgeRoutes)
 
 // --- Health check ---
 fastify.get('/health', async () => ({ status: 'ok', timestamp: new Date().toISOString() }))
+
+// --- LLM reference ---
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const llmsTxt = readFileSync(join(__dirname, 'llms.txt'), 'utf-8')
+fastify.get('/llms.txt', async (_request, reply) => {
+  reply.type('text/plain; charset=utf-8').send(llmsTxt)
+})
 
 // --- Error handler ---
 fastify.setErrorHandler((err, request, reply) => {

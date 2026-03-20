@@ -1,0 +1,481 @@
+# MoneyLine API — LLM Reference
+
+> Base URL: `https://mlapi.bet/v1`
+> Docs: https://www.moneylineapp.com/docs
+> Dashboard: https://www.moneylineapp.com/dashboard
+
+---
+
+## Authentication
+
+All API requests require an API key passed via the `x-api-key` header.
+
+```
+x-api-key: ml_live_<your_key>
+```
+
+Keys are created in the dashboard at https://www.moneylineapp.com/dashboard/keys (max 5 active keys per account).
+
+---
+
+## Tiers & Credits
+
+| Tier | Price | Credits/mo | Req/min | Odds | Edge | Injuries | Play-by-Play |
+|------|-------|-----------|---------|------|------|----------|-------------|
+| Free | $0 | 1,000 | 10 | — | — | — | — |
+| Starter | $29 | 150,000 | 60 | 1 bookmaker | — | Yes | — |
+| Pro | $149 | 1,500,000 | 200 | All bookmakers | Yes | Yes | Yes |
+| Business | $299 | 5,000,000 | 500 | All bookmakers | Yes | Yes | Yes |
+| Enterprise | Custom | Unlimited | Unlimited | All bookmakers | Yes | Yes | Yes |
+
+- **1 credit = 1 API request** (account-level, shared across all keys)
+- **Business tier** supports overage billing at $0.00015/credit beyond the limit
+- **Free tier** is restricted to NFL, NBA, MLB, NHL
+
+---
+
+## Response Format
+
+### Success
+
+```json
+{
+  "success": true,
+  "data": { ... },
+  "meta": { "count": 10, "page": 1, "pages": 5, "total": 50 }
+}
+```
+
+### Error
+
+```json
+{
+  "success": false,
+  "error": { "code": 401, "message": "Invalid or missing API key." }
+}
+```
+
+### Error Codes
+
+| Code | Meaning |
+|------|---------|
+| 400 | Bad request / invalid parameters |
+| 401 | Missing or invalid API key |
+| 403 | Tier too low for this endpoint |
+| 404 | Resource not found |
+| 429 | Rate limit or credit limit exceeded |
+| 500 | Server error |
+
+---
+
+## Rate Limit Headers
+
+Every response includes:
+
+```
+X-RateLimit-Limit: 60
+X-RateLimit-Remaining: 42
+X-RateLimit-Reset: 38
+```
+
+When exceeded, you receive a 429 with `Retry-After: 60`.
+
+---
+
+## Endpoints
+
+### Sports & Leagues
+
+#### GET /v1/sports
+List all sports and their leagues.
+
+**Tier:** Free
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "sport": "basketball",
+      "leagues": [{ "leagueId": "nba", "name": "NBA" }]
+    }
+  ]
+}
+```
+
+---
+
+#### GET /v1/leagues
+List all leagues, optionally filtered by sport.
+
+**Tier:** Free
+**Params:** `?sport=basketball`
+
+**Response:**
+```json
+{
+  "success": true,
+  "meta": { "count": 4 },
+  "data": [
+    { "leagueId": "nba", "name": "NBA", "sport": "basketball" }
+  ]
+}
+```
+
+---
+
+#### GET /v1/leagues/:leagueId
+Get a single league by ID.
+
+**Tier:** Free
+**League IDs:** `nba`, `nfl`, `mlb`, `nhl`
+
+---
+
+### Events & Scores
+
+#### GET /v1/events
+List events with filtering and pagination.
+
+**Tier:** Free
+**Params:**
+| Param | Type | Default | Description |
+|-------|------|---------|-------------|
+| league | string | — | Filter by league ID |
+| sport | string | — | Filter by sport |
+| date | string | — | Exact date (YYYY-MM-DD) |
+| from | string | — | Range start (ISO 8601) |
+| to | string | — | Range end (ISO 8601) |
+| status | string | — | `scheduled`, `in_progress`, or `final` |
+| limit | number | 25 | Max 100 |
+| page | number | 1 | Page number |
+
+**Response:**
+```json
+{
+  "success": true,
+  "meta": { "count": 14, "total": 142, "page": 1, "pages": 6 },
+  "data": [
+    {
+      "eventId": "nba-ev-311286",
+      "leagueId": "nba",
+      "sport": "basketball",
+      "homeTeamName": "Boston Celtics",
+      "awayTeamName": "Los Angeles Lakers",
+      "startTime": "2026-03-09T23:30:00.000Z",
+      "status": "final",
+      "scores": { "home": 112, "away": 105 }
+    }
+  ]
+}
+```
+
+---
+
+#### GET /v1/events/live
+Get all in-progress events with live scores.
+
+**Tier:** Free
+**Params:** `?league=nba`
+
+In-progress events include `period` and `clock` fields.
+
+---
+
+#### GET /v1/events/today
+Get today's scheduled events.
+
+**Tier:** Free
+**Params:** `?league=nba`
+
+---
+
+#### GET /v1/events/:eventId
+Get full details for a single event.
+
+**Tier:** Free
+
+---
+
+#### GET /v1/events/:eventId/play-by-play
+Get play-by-play data for a specific event.
+
+**Tier:** Pro+
+
+---
+
+#### GET /v1/leagues/:leagueId/scores
+Get game scores for a league on a specific date.
+
+**Tier:** Free
+**Params:** `?date=2026-03-20` (defaults to today)
+
+---
+
+#### GET /v1/leagues/:leagueId/standings
+Get current standings for a league.
+
+**Tier:** Free
+**Params:** `?conference=Eastern&division=Atlantic`
+
+---
+
+### Teams & Players
+
+#### GET /v1/leagues/:leagueId/teams
+List all teams in a league.
+
+**Tier:** Free
+
+**Response:**
+```json
+{
+  "success": true,
+  "meta": { "count": 30, "league": "nba" },
+  "data": [
+    { "teamId": "nba-bos", "name": "Boston Celtics", "abbreviation": "BOS", "leagueId": "nba" }
+  ]
+}
+```
+
+---
+
+#### GET /v1/teams/:teamId
+Get detailed info for a team.
+
+**Tier:** Free
+
+---
+
+#### GET /v1/teams/:teamId/roster
+Get the current roster for a team.
+
+**Tier:** Free
+
+**Response includes:** Array of `{ playerId, name, position, number }`
+
+---
+
+#### GET /v1/teams/:teamId/injuries
+Get the injury report for a team.
+
+**Tier:** Starter+
+
+**Response includes:** Array of `{ name, status, injury }`
+
+---
+
+#### GET /v1/teams/:teamId/stats
+Get aggregated stats for a team.
+
+**Tier:** Free
+**Params:** `?season=2025`
+
+---
+
+#### GET /v1/teams/:teamId/schedule
+Get the schedule (past and upcoming) for a team.
+
+**Tier:** Free
+
+---
+
+#### GET /v1/players/:playerId
+Get detailed info for a player.
+
+**Tier:** Free
+
+---
+
+#### GET /v1/players/:playerId/stats
+Get stats for a player.
+
+**Tier:** Free
+**Params:**
+| Param | Type | Default | Description |
+|-------|------|---------|-------------|
+| type | string | season | `season`, `game`, or `career` |
+| season | string | current | Season year (e.g. "2025") |
+
+---
+
+### Odds & Bookmakers
+
+#### GET /v1/odds
+Browse odds with filtering.
+
+**Tier:** Starter+
+**Params:**
+| Param | Type | Default | Description |
+|-------|------|---------|-------------|
+| league | string | — | Filter by league ID |
+| market | string | — | `moneyline`, `spreads`, or `totals` |
+| bookmaker | string | — | Filter by bookmaker key |
+| limit | number | 25 | Max 50 |
+| page | number | 1 | Page number |
+
+**Note:** Starter tier sees 1 bookmaker per event. Pro+ sees all.
+
+**Response:**
+```json
+{
+  "success": true,
+  "meta": { "count": 25, "page": 1 },
+  "data": [
+    {
+      "eventId": "nba-ev-311310",
+      "homeTeam": "Miami Heat",
+      "awayTeam": "Chicago Bulls",
+      "market": "moneyline",
+      "bookmakers": [
+        { "bookmakerId": "draftkings", "name": "DraftKings", "home": -150, "away": +130 }
+      ]
+    }
+  ]
+}
+```
+
+---
+
+#### GET /v1/events/:eventId/odds
+Get odds for a specific event.
+
+**Tier:** Starter+
+
+---
+
+#### GET /v1/odds/bookmakers
+List all tracked sportsbooks.
+
+**Tier:** Starter+
+
+**Response:** Array of `{ bookmakerId, name }` (DraftKings, FanDuel, BetMGM, etc.)
+
+---
+
+### Edge Data & Analysis
+
+#### GET /v1/edge
+Browse edge opportunities (arbitrage, value bets, positive EV).
+
+**Tier:** Pro+
+**Params:**
+| Param | Type | Default | Description |
+|-------|------|---------|-------------|
+| type | string | — | `arbitrage`, `value`, or `ev` |
+| league | string | — | Filter by league ID |
+| minProfit | number | — | Min profit % (arbitrage) |
+| minEdge | number | — | Min edge % (value bets) |
+| limit | number | 25 | Max 50 |
+| page | number | 1 | Page number |
+
+---
+
+#### GET /v1/edge/arbitrage
+Get arbitrage opportunities across sportsbooks.
+
+**Tier:** Pro+
+**Params:** `?league=nba&minProfit=2`
+
+---
+
+#### GET /v1/edge/value
+Get value bets where odds exceed fair probability.
+
+**Tier:** Pro+
+**Params:** `?league=nba&minEdge=5`
+
+---
+
+#### GET /v1/edge/ev
+Get positive expected value bets.
+
+**Tier:** Pro+
+**Params:** `?league=nba`
+
+---
+
+#### GET /v1/events/:eventId/edge
+Get edge data for a specific event.
+
+**Tier:** Pro+
+
+---
+
+## Quick-Start Examples
+
+### Fetch today's NBA games
+
+```bash
+curl -H "x-api-key: ml_live_YOUR_KEY" \
+  "https://mlapi.bet/v1/events/today?league=nba"
+```
+
+### Get live scores
+
+```bash
+curl -H "x-api-key: ml_live_YOUR_KEY" \
+  "https://mlapi.bet/v1/events/live"
+```
+
+### Get odds for a game (Starter+)
+
+```bash
+curl -H "x-api-key: ml_live_YOUR_KEY" \
+  "https://mlapi.bet/v1/events/nba-ev-311310/odds"
+```
+
+### Get arbitrage opportunities (Pro+)
+
+```bash
+curl -H "x-api-key: ml_live_YOUR_KEY" \
+  "https://mlapi.bet/v1/edge/arbitrage?league=nba&minProfit=1"
+```
+
+### Get team roster
+
+```bash
+curl -H "x-api-key: ml_live_YOUR_KEY" \
+  "https://mlapi.bet/v1/teams/nba-bos/roster"
+```
+
+### Get player season stats
+
+```bash
+curl -H "x-api-key: ml_live_YOUR_KEY" \
+  "https://mlapi.bet/v1/players/nba-p-12345/stats?type=season"
+```
+
+---
+
+## Endpoint Summary
+
+| Method | Path | Tier | Description |
+|--------|------|------|-------------|
+| GET | /v1/sports | Free | List sports and leagues |
+| GET | /v1/leagues | Free | List leagues |
+| GET | /v1/leagues/:leagueId | Free | Get single league |
+| GET | /v1/events | Free | List events (paginated) |
+| GET | /v1/events/live | Free | In-progress events |
+| GET | /v1/events/today | Free | Today's events |
+| GET | /v1/events/:eventId | Free | Single event |
+| GET | /v1/events/:eventId/play-by-play | Pro | Play-by-play data |
+| GET | /v1/leagues/:leagueId/scores | Free | Scores by date |
+| GET | /v1/leagues/:leagueId/standings | Free | League standings |
+| GET | /v1/leagues/:leagueId/teams | Free | Teams in league |
+| GET | /v1/teams/:teamId | Free | Team details |
+| GET | /v1/teams/:teamId/roster | Free | Team roster |
+| GET | /v1/teams/:teamId/injuries | Starter | Injury report |
+| GET | /v1/teams/:teamId/stats | Free | Team stats |
+| GET | /v1/teams/:teamId/schedule | Free | Team schedule |
+| GET | /v1/players/:playerId | Free | Player details |
+| GET | /v1/players/:playerId/stats | Free | Player stats |
+| GET | /v1/odds | Starter | Browse odds |
+| GET | /v1/events/:eventId/odds | Starter | Event odds |
+| GET | /v1/odds/bookmakers | Starter | List bookmakers |
+| GET | /v1/edge | Pro | Browse edge data |
+| GET | /v1/edge/arbitrage | Pro | Arbitrage opportunities |
+| GET | /v1/edge/value | Pro | Value bets |
+| GET | /v1/edge/ev | Pro | Positive EV bets |
+| GET | /v1/events/:eventId/edge | Pro | Event edge data |

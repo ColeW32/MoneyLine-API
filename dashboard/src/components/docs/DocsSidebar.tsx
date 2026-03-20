@@ -28,6 +28,12 @@ const SECTIONS = [
       { label: 'Error Codes', href: '/docs/errors' },
     ],
   },
+  {
+    title: 'Tools',
+    items: [
+      { label: 'For AI & LLMs', href: '/docs/llms' },
+    ],
+  },
 ]
 
 export function DocsSidebar() {
