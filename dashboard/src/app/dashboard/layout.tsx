@@ -147,7 +147,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               href="https://www.moneylineapp.com/docs"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-xs text-[#6b7280] hover:text-[#1a1a1a] transition-colors"
+              className="text-xs text-[#6b7280] hover:text-[#1a1a1a] transition-colors mr-2"
             >
               Documentation
             </a>
