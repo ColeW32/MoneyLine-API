@@ -75,7 +75,7 @@ async function start() {
     await connectDB()
 
     const port = parseInt(process.env.PORT || process.env.API_PORT) || 3000
-    const host = process.env.NODE_ENV === 'production' ? '0.0.0.0' : '127.0.0.1'
+    const host = (process.env.NODE_ENV === 'production' || process.env.PORT) ? '0.0.0.0' : '127.0.0.1'
 
     await fastify.listen({ port, host })
     console.log(`[server] MoneyLine API running on http://${host}:${port}`)
