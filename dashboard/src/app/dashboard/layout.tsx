@@ -132,14 +132,25 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Main area */}
       <div className="flex-1 flex flex-col h-screen">
         {/* Top bar */}
-        <div className="h-12 shrink-0 flex items-center justify-end gap-3 px-6">
-          <Link
-            href="/dashboard/plan"
-            className="text-xs font-medium bg-[#1a1a1a] text-white px-2.5 py-1 rounded-full uppercase tracking-wide hover:bg-[#2a2a2a] transition-colors cursor-pointer"
-          >
-            {TIER_LABELS[user.tier] || user.tier}
-          </Link>
-          <span className="text-sm text-[#6b7280]">{user.email}</span>
+        <div className="h-14 shrink-0 flex items-center justify-between px-6">
+          {/* Logo appears here when sidebar is collapsed */}
+          <div className="flex items-center">
+            {collapsed && (
+              <Link href="/dashboard" className="text-base font-bold tracking-tight text-[#1a1a1a] transition-opacity duration-200">
+                Money <span className="font-light">\</span> Line
+              </Link>
+            )}
+          </div>
+
+          <div className="flex items-center gap-3">
+            <Link
+              href="/dashboard/plan"
+              className="text-xs font-medium bg-[#1a1a1a] text-white px-2.5 py-1 rounded-full uppercase tracking-wide hover:bg-[#2a2a2a] transition-colors cursor-pointer"
+            >
+              {TIER_LABELS[user.tier] || user.tier}
+            </Link>
+            <span className="text-sm text-[#6b7280]">{user.email}</span>
+          </div>
         </div>
 
         {/* Content — fixed dark card, scrolls internally */}
