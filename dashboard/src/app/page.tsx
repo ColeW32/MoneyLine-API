@@ -289,85 +289,120 @@ export default function LandingPage() {
 
       {/* Pricing */}
       <section id="pricing" className="py-10 sm:py-16 lg:py-24 px-4 sm:px-6 ml-page-bg">
-        <div className="max-w-5xl mx-auto">
+        <div className="max-w-6xl mx-auto">
           <h2 className="text-2xl min-[480px]:text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight ml-text">
-            Simple, transparent pricing.
+            Simple, credit-based pricing.
           </h2>
           <p className="text-[15px] sm:text-base ml-text-muted mt-3">
-            Start building today. Scale when you&apos;re ready.
+            Start building for free. Scale when you&apos;re ready.
           </p>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-12">
-            {/* Starter */}
-            <div className="bg-white border border-[#e0e0e0] rounded-xl p-6 flex flex-col">
-              <p className="text-[12px] font-medium ml-text-gray uppercase tracking-[0.15em]">Starter</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mt-12">
+            {/* Free */}
+            <div className="bg-white border border-[#e0e0e0] rounded-xl p-5 flex flex-col">
+              <p className="text-[11px] font-medium ml-text-gray uppercase tracking-[0.15em]">Free</p>
               <p className="mt-2">
-                <span className="text-3xl font-bold ml-text">$0</span>
-                <span className="text-sm ml-text-gray ml-1">/ month</span>
+                <span className="text-2xl font-bold ml-text">$0</span>
+                <span className="text-xs ml-text-gray ml-1">/ month</span>
               </p>
-              <p className="text-sm ml-text-gray mt-2">For builders and experimenters</p>
-              <ul className="mt-6 space-y-3 flex-1">
-                {['1,000 requests/day', '10 sportsbooks covered', 'REST API access', 'Community support'].map((f) => (
-                  <li key={f} className="flex items-start gap-2 text-sm ml-text-muted">
+              <p className="text-xs ml-text-gray mt-1 mb-4">1,000 credits/mo</p>
+              <ul className="space-y-2 flex-1">
+                {['Scores & standings', '10 req/min', '4 major leagues', '7-day history'].map((f) => (
+                  <li key={f} className="flex items-start gap-1.5 text-xs ml-text-muted">
                     <span className="text-green-500 mt-0.5">&#10003;</span> {f}
                   </li>
                 ))}
               </ul>
-              <Link href="/signup" className="mt-6 block text-center bg-[#1a1a1a] text-white text-sm font-medium py-2.5 rounded-full hover:shadow-lg transition-shadow">
-                Start for free &rarr;
+              <Link href="/signup" className="mt-5 block text-center bg-[#1a1a1a] text-white text-xs font-medium py-2 rounded-full hover:shadow-lg transition-shadow">
+                Start free &rarr;
               </Link>
-              <p className="text-[12px] ml-text-gray text-center mt-2">No time limit on the free tier.</p>
             </div>
 
-            {/* Pro */}
-            <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-6 flex flex-col relative">
-              <span className="absolute -top-3 left-6 bg-[#e8ff47] text-[#1a1a1a] text-[11px] font-bold uppercase tracking-wider px-3 py-1 rounded-full">
+            {/* Starter */}
+            <div className="bg-white border border-[#e0e0e0] rounded-xl p-5 flex flex-col">
+              <p className="text-[11px] font-medium ml-text-gray uppercase tracking-[0.15em]">Starter</p>
+              <p className="mt-2">
+                <span className="text-2xl font-bold ml-text">$29</span>
+                <span className="text-xs ml-text-gray ml-1">/ month</span>
+              </p>
+              <p className="text-xs ml-text-gray mt-1 mb-4">150K credits/mo</p>
+              <ul className="space-y-2 flex-1">
+                {['Everything in Free', 'Odds + injuries', '60 req/min', 'All sports', '90-day history'].map((f) => (
+                  <li key={f} className="flex items-start gap-1.5 text-xs ml-text-muted">
+                    <span className="text-green-500 mt-0.5">&#10003;</span> {f}
+                  </li>
+                ))}
+              </ul>
+              <Link href="/signup" className="mt-5 block text-center bg-[#1a1a1a] text-white text-xs font-medium py-2 rounded-full hover:shadow-lg transition-shadow">
+                Get started &rarr;
+              </Link>
+            </div>
+
+            {/* Pro — Most Popular */}
+            <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-5 flex flex-col relative">
+              <span className="absolute -top-2.5 left-4 bg-[#e8ff47] text-[#1a1a1a] text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full">
                 Most Popular
               </span>
-              <p className="text-[12px] font-medium text-[#888] uppercase tracking-[0.15em]">Pro</p>
-              <div className="mt-2 flex items-center gap-3">
-                <span className="text-3xl font-bold text-white">$79</span>
-                <span className="text-sm text-[#888]">/ month</span>
-                <span className="bg-[#e8ff47] text-[#1a1a1a] text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded">
-                  2 months free
-                </span>
-              </div>
-              <p className="text-sm text-[#888] mt-2">After your first 2 free months.</p>
-              <p className="text-sm text-white/80 mt-3">For serious developers and traders</p>
-              <ul className="mt-6 space-y-3 flex-1">
-                {['Unlimited requests', '100+ sportsbooks normalized', 'WebSocket real-time streaming', 'Pre-computed EV + arbitrage signals', 'Player props across all books', 'Email support'].map((f) => (
-                  <li key={f} className="flex items-start gap-2 text-sm text-white/70">
+              <p className="text-[11px] font-medium text-[#888] uppercase tracking-[0.15em]">Pro</p>
+              <p className="mt-2">
+                <span className="text-2xl font-bold text-white">$149</span>
+                <span className="text-xs text-[#888] ml-1">/ month</span>
+              </p>
+              <p className="text-xs text-[#888] mt-1 mb-4">1.5M credits/mo</p>
+              <ul className="space-y-2 flex-1">
+                {['Everything in Starter', 'Edge data (arb, EV)', 'Play-by-play', 'All bookmakers', '200 req/min', '1-year history'].map((f) => (
+                  <li key={f} className="flex items-start gap-1.5 text-xs text-white/70">
                     <span className="text-green-400 mt-0.5">&#10003;</span> {f}
                   </li>
                 ))}
               </ul>
-              <Link href="/signup" className="mt-6 block text-center bg-[#e8ff47] text-[#1a1a1a] text-sm font-bold py-2.5 rounded-full hover:brightness-110 transition-all">
-                Claim 2 free months &rarr;
+              <Link href="/signup" className="mt-5 block text-center bg-[#e8ff47] text-[#1a1a1a] text-xs font-bold py-2 rounded-full hover:brightness-110 transition-all">
+                Start with Pro &rarr;
               </Link>
             </div>
 
-            {/* Enterprise */}
-            <div className="bg-white border border-[#e0e0e0] rounded-xl p-6 flex flex-col">
-              <p className="text-[12px] font-medium ml-text-gray uppercase tracking-[0.15em]">Enterprise</p>
+            {/* Business */}
+            <div className="bg-white border border-[#e0e0e0] rounded-xl p-5 flex flex-col">
+              <p className="text-[11px] font-medium ml-text-gray uppercase tracking-[0.15em]">Business</p>
               <p className="mt-2">
-                <span className="text-3xl font-bold ml-text">Custom</span>
+                <span className="text-2xl font-bold ml-text">$299</span>
+                <span className="text-xs ml-text-gray ml-1">/ month</span>
               </p>
-              <p className="text-sm ml-text-gray mt-2">For funds, media platforms, and trading firms</p>
-              <ul className="mt-6 space-y-3 flex-1">
-                {['Everything in Pro', 'SLA uptime guarantee', 'Dedicated account support', 'Custom data feeds', 'White-glove onboarding', '2 months free on annual contracts'].map((f) => (
-                  <li key={f} className="flex items-start gap-2 text-sm ml-text-muted">
+              <p className="text-xs ml-text-gray mt-1 mb-4">5M credits/mo</p>
+              <ul className="space-y-2 flex-1">
+                {['Everything in Pro', '500 req/min', 'Overage billing', 'Unlimited history', 'Priority support'].map((f) => (
+                  <li key={f} className="flex items-start gap-1.5 text-xs ml-text-muted">
                     <span className="text-green-500 mt-0.5">&#10003;</span> {f}
                   </li>
                 ))}
               </ul>
-              <Link href="#" className="mt-6 block text-center bg-[#1a1a1a] text-white text-sm font-medium py-2.5 rounded-full hover:shadow-lg transition-shadow">
+              <Link href="/signup" className="mt-5 block text-center bg-[#1a1a1a] text-white text-xs font-medium py-2 rounded-full hover:shadow-lg transition-shadow">
+                Get started &rarr;
+              </Link>
+            </div>
+
+            {/* Enterprise */}
+            <div className="bg-white border border-[#e0e0e0] rounded-xl p-5 flex flex-col">
+              <p className="text-[11px] font-medium ml-text-gray uppercase tracking-[0.15em]">Enterprise</p>
+              <p className="mt-2">
+                <span className="text-2xl font-bold ml-text">Custom</span>
+              </p>
+              <p className="text-xs ml-text-gray mt-1 mb-4">Unlimited credits</p>
+              <ul className="space-y-2 flex-1">
+                {['Everything in Business', 'Unlimited rate', 'Webhooks', 'Dedicated support', 'SLA guarantee', 'Custom data feeds'].map((f) => (
+                  <li key={f} className="flex items-start gap-1.5 text-xs ml-text-muted">
+                    <span className="text-green-500 mt-0.5">&#10003;</span> {f}
+                  </li>
+                ))}
+              </ul>
+              <Link href="mailto:enterprise@moneylineapp.com" className="mt-5 block text-center bg-[#1a1a1a] text-white text-xs font-medium py-2 rounded-full hover:shadow-lg transition-shadow">
                 Contact us &rarr;
               </Link>
             </div>
           </div>
 
           <p className="text-center text-sm ml-text-gray mt-8">
-            2 free months applied automatically at signup. Cancel anytime. No hidden fees.
+            All plans include auto-upgrade protection. Cancel anytime. No hidden fees.
           </p>
           <p className="text-center mt-2">
             <Link href="/docs/rate-limits" className="text-sm text-[#b5c400] hover:underline">See full pricing details &rarr;</Link>

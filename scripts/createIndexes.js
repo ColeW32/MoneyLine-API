@@ -65,6 +65,21 @@ async function createIndexes() {
   await db.collection('users').createIndex({ email: 1 }, { unique: true })
   console.log('  - users indexes created')
 
+  // users — billing indexes
+  await db.collection('users').createIndex({ supabaseId: 1 }, { unique: true })
+  await db.collection('users').createIndex({ stripeCustomerId: 1 }, { sparse: true })
+  console.log('  - users billing indexes created')
+
+  // credit_ledger
+  await db.collection('credit_ledger').createIndex({ userId: 1, timestamp: -1 })
+  await db.collection('credit_ledger').createIndex({ userId: 1, periodStart: 1 })
+  console.log('  - credit_ledger indexes created')
+
+  // billing_events
+  await db.collection('billing_events').createIndex({ stripeEventId: 1 }, { unique: true })
+  await db.collection('billing_events').createIndex({ userId: 1, createdAt: -1 })
+  console.log('  - billing_events indexes created')
+
   console.log('[indexes] All indexes created successfully.')
   await closeDB()
 }

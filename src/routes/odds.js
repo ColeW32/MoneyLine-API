@@ -2,7 +2,7 @@ import { getCollection } from '../db.js'
 import { success, error } from '../utils/response.js'
 
 export default async function oddsRoutes(fastify) {
-  // GET /v1/events/:eventId/odds (hobbyist+)
+  // GET /v1/events/:eventId/odds (starter+)
   fastify.get('/v1/events/:eventId/odds', async (request, reply) => {
     const { eventId } = request.params
     const odds = await getCollection('odds').findOne(
@@ -23,7 +23,7 @@ export default async function oddsRoutes(fastify) {
     return success(odds, { league: odds.leagueId, event: eventId })
   })
 
-  // GET /v1/odds — bulk odds feed (hobbyist+)
+  // GET /v1/odds — bulk odds feed (starter+)
   fastify.get('/v1/odds', async (request, reply) => {
     const { league, market, bookmaker, limit, page } = request.query
 
@@ -75,7 +75,7 @@ export default async function oddsRoutes(fastify) {
     return success(odds, { count: odds.length, page: pageNum })
   })
 
-  // GET /v1/odds/bookmakers — list available sportsbooks (hobbyist+)
+  // GET /v1/odds/bookmakers — list available sportsbooks (starter+)
   fastify.get('/v1/odds/bookmakers', async (request, reply) => {
     const pipeline = [
       { $unwind: '$bookmakers' },

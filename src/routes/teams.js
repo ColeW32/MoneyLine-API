@@ -42,7 +42,7 @@ export default async function teamRoutes(fastify) {
     return success(roster, { league: roster.leagueId, team: teamId })
   })
 
-  // GET /v1/teams/:teamId/injuries (hobbyist+)
+  // GET /v1/teams/:teamId/injuries (starter+)
   fastify.get('/v1/teams/:teamId/injuries', async (request, reply) => {
     const { teamId } = request.params
     const injuries = await getCollection('injuries').findOne(

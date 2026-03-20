@@ -13,7 +13,7 @@ interface EndpointCardProps {
   method: 'GET' | 'POST' | 'DELETE'
   path: string
   description: string
-  tier?: 'free' | 'hobbyist' | 'pro' | 'enterprise'
+  tier?: 'free' | 'starter' | 'pro' | 'business' | 'enterprise'
   params?: Param[]
   response?: string
 }

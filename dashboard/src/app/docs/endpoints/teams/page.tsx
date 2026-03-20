@@ -85,7 +85,7 @@ export default function TeamsPlayersPage() {
         method="GET"
         path="/v1/teams/:teamId/injuries"
         description="Get the latest injury report for a team."
-        tier="hobbyist"
+        tier="starter"
         params={[
           { name: 'teamId', type: 'string', required: true, description: 'The unique identifier of the team.' },
         ]}

@@ -8,10 +8,10 @@ export const ROUTE_PERMISSIONS = {
   '/v1/edge/arbitrage': 'pro',
   '/v1/events/:eventId/edge': 'pro',
   '/v1/events/:eventId/play-by-play': 'pro',
-  '/v1/odds': 'hobbyist',
-  '/v1/odds/bookmakers': 'hobbyist',
-  '/v1/events/:eventId/odds': 'hobbyist',
-  '/v1/teams/:teamId/injuries': 'hobbyist',
+  '/v1/odds': 'starter',
+  '/v1/odds/bookmakers': 'starter',
+  '/v1/events/:eventId/odds': 'starter',
+  '/v1/teams/:teamId/injuries': 'starter',
 }
 
 export function getRequiredTier(routePattern) {

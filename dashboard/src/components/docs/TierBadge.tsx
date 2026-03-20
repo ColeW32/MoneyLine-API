@@ -1,11 +1,12 @@
 interface TierBadgeProps {
-  tier: 'free' | 'hobbyist' | 'pro' | 'enterprise'
+  tier: 'free' | 'starter' | 'pro' | 'business' | 'enterprise'
 }
 
 const TIER_STYLES: Record<string, { label: string; bg: string; text: string }> = {
   free: { label: 'Free', bg: 'bg-[#e8e8e8]', text: 'text-[#555]' },
-  hobbyist: { label: 'Hobbyist+', bg: 'bg-[#dbeafe]', text: 'text-[#1e40af]' },
+  starter: { label: 'Starter+', bg: 'bg-[#dbeafe]', text: 'text-[#1e40af]' },
   pro: { label: 'Pro+', bg: 'bg-[#e8ff47]/30', text: 'text-[#4a5500]' },
+  business: { label: 'Business+', bg: 'bg-[#fef3c7]', text: 'text-[#92400e]' },
   enterprise: { label: 'Enterprise', bg: 'bg-[#f3e8ff]', text: 'text-[#6b21a8]' },
 }
 

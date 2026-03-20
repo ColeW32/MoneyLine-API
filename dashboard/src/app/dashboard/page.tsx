@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/lib/auth'
 import { getUsage, listKeys, type UsageData, type ApiKey } from '@/lib/api'
-import { TIER_LABELS } from '@/lib/constants'
+import { TIER_LABELS, TIER_CREDITS } from '@/lib/constants'
 import Link from 'next/link'
 
 export default function DashboardOverview() {
@@ -16,12 +16,16 @@ export default function DashboardOverview() {
     listKeys().then((r) => setKeys(r.data)).catch(() => {})
   }, [])
 
-  const usagePct = usage
-    ? usage.monthlyLimit === 0 ? 0 : Math.min(100, (usage.monthlyTotal / usage.monthlyLimit) * 100)
-    : 0
+  const creditsUsed = usage?.creditsUsed ?? 0
+  const creditsLimit = usage?.creditsLimit ?? 0
+  const isUnlimited = creditsLimit === Infinity || creditsLimit === null
+  const usagePct = isUnlimited ? 0 : creditsLimit === 0 ? 0 : Math.min(100, (creditsUsed / creditsLimit) * 100)
 
   const activeKeys = keys.filter((k) => k.status === 'active')
   const firstKey = activeKeys[0]
+
+  // Color transitions: green (<70%), yellow (70-90%), red (>90%)
+  const barColor = usagePct > 90 ? 'bg-red-400' : usagePct > 70 ? 'bg-yellow-400' : 'bg-[#e8ff47]'
 
   return (
     <div className="space-y-6">
@@ -31,21 +35,31 @@ export default function DashboardOverview() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {/* Usage card */}
+        {/* Credit Usage card */}
         <div className="bg-[#1a1d27] rounded-xl border border-white/5 p-5">
-          <p className="text-xs text-zinc-400 font-medium mb-3">Monthly Requests</p>
+          <p className="text-xs text-zinc-400 font-medium mb-3">Credit Usage</p>
           <div className="text-2xl font-bold text-white">
-            {usage?.monthlyTotal.toLocaleString() ?? '—'}
+            {creditsUsed.toLocaleString()}
             <span className="text-sm text-zinc-500 font-normal ml-1">
-              / {usage?.monthlyLimit === Infinity ? '∞' : usage?.monthlyLimit?.toLocaleString() ?? '—'}
+              / {isUnlimited ? '∞' : creditsLimit.toLocaleString()}
             </span>
           </div>
           <div className="mt-3 h-1.5 bg-white/5 rounded-full overflow-hidden">
             <div
-              className={`h-full rounded-full transition-all ${usagePct > 90 ? 'bg-red-400' : usagePct > 70 ? 'bg-yellow-400' : 'bg-[#e8ff47]'}`}
+              className={`h-full rounded-full transition-all ${barColor}`}
               style={{ width: `${usagePct}%` }}
             />
           </div>
+          {usage?.overageCredits ? (
+            <p className="text-xs text-yellow-400 mt-2">
+              {usage.overageCredits.toLocaleString()} overage credits this period
+            </p>
+          ) : null}
+          {usage?.billingCycleEnd && (
+            <p className="text-xs text-zinc-500 mt-1">
+              Resets {new Date(usage.billingCycleEnd).toLocaleDateString()}
+            </p>
+          )}
         </div>
 
         {/* Tier card */}
@@ -54,8 +68,15 @@ export default function DashboardOverview() {
           <span className="inline-block bg-[#e8ff47] text-[#1a1a1a] text-sm font-semibold px-3 py-1 rounded-full">
             {TIER_LABELS[user?.tier || 'free']}
           </span>
-          <p className="text-xs text-zinc-500 mt-3">
-            {user?.tier === 'free' ? 'Upgrade for odds, injuries, and edge data' : 'Full access to all endpoints'}
+          <p className="text-xs text-zinc-400 mt-2">
+            {TIER_CREDITS[user?.tier || 'free']} credits/month
+          </p>
+          <p className="text-xs text-zinc-500 mt-1">
+            {user?.tier === 'free'
+              ? 'Upgrade for odds, injuries, and edge data'
+              : user?.tier === 'starter'
+              ? 'Upgrade for edge data and play-by-play'
+              : 'Full access to all endpoints'}
           </p>
         </div>
 

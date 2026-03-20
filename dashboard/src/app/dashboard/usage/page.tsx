@@ -14,19 +14,59 @@ export default function UsagePage() {
     ? Math.max(...usage.dailyCounts.map((d) => d.count), 1)
     : 1
 
+  const creditsUsed = usage?.creditsUsed ?? 0
+  const creditsLimit = usage?.creditsLimit ?? 0
+  const isUnlimited = creditsLimit === Infinity || creditsLimit === null
+  const usagePct = isUnlimited ? 0 : creditsLimit === 0 ? 0 : Math.min(100, (creditsUsed / creditsLimit) * 100)
+
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-white">Usage</h1>
+      <div>
+        <h1 className="text-2xl font-bold text-white">Usage</h1>
+        {usage?.billingCycleStart && usage?.billingCycleEnd && (
+          <p className="text-zinc-400 text-sm mt-1">
+            Billing period: {new Date(usage.billingCycleStart).toLocaleDateString()} &mdash; {new Date(usage.billingCycleEnd).toLocaleDateString()}
+          </p>
+        )}
+      </div>
+
+      {/* Credit progress bar */}
+      {usage && (
+        <div className="bg-[#1a1d27] rounded-xl border border-white/5 p-5">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs text-zinc-400 font-medium">Credits Used</p>
+            <p className="text-xs text-zinc-500">
+              {isUnlimited ? '' : `${Math.round(usagePct)}% of limit`}
+            </p>
+          </div>
+          <div className="text-2xl font-bold text-white">
+            {creditsUsed.toLocaleString()}
+            <span className="text-sm text-zinc-500 font-normal ml-1">
+              / {isUnlimited ? '∞' : creditsLimit.toLocaleString()} credits
+            </span>
+          </div>
+          <div className="mt-3 h-2 bg-white/5 rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all ${
+                usagePct > 90 ? 'bg-red-400' : usagePct > 70 ? 'bg-yellow-400' : 'bg-[#e8ff47]'
+              }`}
+              style={{ width: `${usagePct}%` }}
+            />
+          </div>
+          {usage.overageCredits > 0 && (
+            <p className="text-xs text-yellow-400 mt-2">
+              {usage.overageCredits.toLocaleString()} overage credits this period
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Usage summary */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="bg-[#1a1d27] rounded-xl border border-white/5 p-5">
-          <p className="text-xs text-zinc-400 font-medium mb-3">This Month</p>
+          <p className="text-xs text-zinc-400 font-medium mb-3">Credits This Month</p>
           <div className="text-2xl font-bold text-white">
-            {usage?.monthlyTotal.toLocaleString() ?? '—'}
-            <span className="text-sm text-zinc-500 font-normal ml-1">
-              / {usage?.monthlyLimit === Infinity ? '∞' : usage?.monthlyLimit?.toLocaleString() ?? '—'}
-            </span>
+            {creditsUsed.toLocaleString()}
           </div>
         </div>
         <div className="bg-[#1a1d27] rounded-xl border border-white/5 p-5">
@@ -44,7 +84,7 @@ export default function UsagePage() {
 
       {/* Daily chart */}
       <div className="bg-[#1a1d27] rounded-xl border border-white/5 p-5">
-        <h2 className="text-white font-semibold text-sm mb-4">Requests (Last 30 Days)</h2>
+        <h2 className="text-white font-semibold text-sm mb-4">Credits (Last 30 Days)</h2>
         {usage?.dailyCounts.length ? (
           <div className="flex items-end gap-1 h-40">
             {usage.dailyCounts.map((d) => (
@@ -54,7 +94,7 @@ export default function UsagePage() {
                   style={{ height: `${(d.count / maxDaily) * 100}%` }}
                 />
                 <div className="absolute -top-8 bg-[#1a1d27] text-white text-xs px-2 py-1 rounded border border-white/10 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10">
-                  {d.date}: {d.count}
+                  {d.date}: {d.count.toLocaleString()} credits
                 </div>
               </div>
             ))}

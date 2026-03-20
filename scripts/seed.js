@@ -303,8 +303,9 @@ async function seed() {
   // --- API Keys (one per tier for testing) ---
   const testKeys = [
     { raw: `ml_test_free_${randomBytes(16).toString('hex')}`, tier: 'free', name: 'Test Free Key' },
-    { raw: `ml_test_hobby_${randomBytes(16).toString('hex')}`, tier: 'hobbyist', name: 'Test Hobbyist Key' },
+    { raw: `ml_test_starter_${randomBytes(16).toString('hex')}`, tier: 'starter', name: 'Test Starter Key' },
     { raw: `ml_test_pro_${randomBytes(16).toString('hex')}`, tier: 'pro', name: 'Test Pro Key' },
+    { raw: `ml_test_biz_${randomBytes(16).toString('hex')}`, tier: 'business', name: 'Test Business Key' },
     { raw: `ml_test_ent_${randomBytes(16).toString('hex')}`, tier: 'enterprise', name: 'Test Enterprise Key' },
   ]
 

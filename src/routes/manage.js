@@ -1,10 +1,11 @@
 import { randomBytes } from 'crypto'
 import { ObjectId } from 'mongodb'
 import { getCollection } from '../db.js'
+import { getRedis } from '../redis.js'
 import { verifyJwt } from '../middleware/jwtAuth.js'
 import { sha256 } from '../utils/hash.js'
 import { success, error } from '../utils/response.js'
-import { TIERS } from '../config/tiers.js'
+import { TIERS, getTierConfig } from '../config/tiers.js'
 
 export default async function manageRoutes(fastify) {
   // ──────────────────────────── Auth ────────────────────────────
@@ -111,14 +112,14 @@ export default async function manageRoutes(fastify) {
     const lookbackDays = Math.min(90, parseInt(days) || 30)
     const since = new Date(Date.now() - lookbackDays * 86_400_000)
 
-    // Daily request counts for chart
+    // Daily credit counts for chart
     const dailyCounts = await getCollection('usage_logs')
       .aggregate([
         { $match: { userId, timestamp: { $gte: since } } },
         {
           $group: {
             _id: { $dateToString: { format: '%Y-%m-%d', date: '$timestamp' } },
-            count: { $sum: 1 },
+            count: { $sum: { $ifNull: ['$creditsConsumed', 1] } },
           },
         },
         { $sort: { _id: 1 } },
@@ -132,20 +133,32 @@ export default async function manageRoutes(fastify) {
       .limit(50)
       .toArray()
 
-    // Monthly total
-    const monthStart = new Date()
-    monthStart.setDate(1)
-    monthStart.setHours(0, 0, 0, 0)
-    const monthlyTotal = await getCollection('usage_logs').countDocuments({
-      userId,
-      timestamp: { $gte: monthStart },
-    })
+    // Real-time credit usage from Redis (primary) or MongoDB (fallback)
+    const redis = getRedis()
+    const redisCredits = await redis.get(`credits:${userId}`)
+    const user = await getCollection('users').findOne({ supabaseId: userId })
+    const creditsUsed = parseInt(redisCredits) || user?.creditsUsedThisPeriod || 0
 
-    const tierConfig = TIERS[request.user.tier] || TIERS.free
+    const tier = request.user.tier || 'free'
+    const tierConfig = getTierConfig(tier)
+
+    // Billing cycle dates (calendar month for now, Stripe billing cycle later)
+    const billingCycleStart = new Date()
+    billingCycleStart.setDate(1)
+    billingCycleStart.setHours(0, 0, 0, 0)
+    const billingCycleEnd = new Date(billingCycleStart)
+    billingCycleEnd.setMonth(billingCycleEnd.getMonth() + 1)
+
+    const overageCredits = tier === 'business' && creditsUsed > tierConfig.creditsPerMonth
+      ? creditsUsed - tierConfig.creditsPerMonth
+      : user?.overageCredits || 0
 
     return success({
-      monthlyTotal,
-      monthlyLimit: tierConfig.requestsPerMonth,
+      creditsUsed,
+      creditsLimit: tierConfig.creditsPerMonth,
+      overageCredits,
+      billingCycleStart: billingCycleStart.toISOString(),
+      billingCycleEnd: user?.currentPeriodEnd || billingCycleEnd.toISOString(),
       dailyCounts: dailyCounts.map((d) => ({ date: d._id, count: d.count })),
       recentRequests: recent,
     })
@@ -154,12 +167,40 @@ export default async function manageRoutes(fastify) {
   // ──────────────────────── Plan ───────────────────────────────
 
   fastify.get('/manage/plan', { preHandler: verifyJwt }, async (request) => {
+    const userId = request.user.supabaseId
     const tier = request.user.tier || 'free'
-    const tierConfig = TIERS[tier]
+    const tierConfig = getTierConfig(tier)
+
+    // Read real-time credit usage from Redis
+    const redis = getRedis()
+    const redisCredits = await redis.get(`credits:${userId}`)
+    const user = await getCollection('users').findOne({ supabaseId: userId })
+    const creditsUsed = parseInt(redisCredits) || user?.creditsUsedThisPeriod || 0
+
+    const overageCredits = tier === 'business' && creditsUsed > tierConfig.creditsPerMonth
+      ? creditsUsed - tierConfig.creditsPerMonth
+      : user?.overageCredits || 0
+    const overageCost = tierConfig.overageRate
+      ? overageCredits * tierConfig.overageRate
+      : 0
+
+    // Billing cycle end
+    const endOfMonth = new Date()
+    endOfMonth.setMonth(endOfMonth.getMonth() + 1, 1)
+    endOfMonth.setHours(0, 0, 0, 0)
 
     return success({
       currentTier: tier,
       tierConfig,
+      creditsUsed,
+      creditsRemaining: tierConfig.creditsPerMonth === Infinity
+        ? Infinity
+        : Math.max(0, tierConfig.creditsPerMonth - creditsUsed),
+      overageCredits,
+      overageCost: Math.round(overageCost * 100) / 100,
+      autoUpgrade: user?.autoUpgrade !== false,
+      cardOnFile: user?.cardOnFile || false,
+      billingCycleEnd: user?.currentPeriodEnd || endOfMonth.toISOString(),
       allTiers: Object.entries(TIERS).map(([key, config]) => ({
         id: key,
         ...config,

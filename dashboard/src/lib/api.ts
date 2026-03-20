@@ -88,6 +88,33 @@ export async function getPlan() {
   return request<PlanData>('/manage/plan')
 }
 
+// --- Billing ---
+
+export async function getBillingStatus() {
+  return request<BillingStatus>('/manage/billing/status')
+}
+
+export async function updateAutoUpgrade(enabled: boolean) {
+  return request<{ autoUpgrade: boolean; message: string }>('/manage/billing/auto-upgrade', {
+    method: 'PATCH',
+    body: JSON.stringify({ enabled }),
+  })
+}
+
+export async function requestCheckout(tier: string) {
+  return request<{ message: string; targetTier: string; price: number }>('/manage/billing/checkout', {
+    method: 'POST',
+    body: JSON.stringify({ tier }),
+  })
+}
+
+export async function requestUpgrade(tier: string) {
+  return request<{ previousTier: string; newTier: string; message: string }>('/manage/billing/upgrade', {
+    method: 'POST',
+    body: JSON.stringify({ tier }),
+  })
+}
+
 // --- Types ---
 
 export interface User {
@@ -110,14 +137,18 @@ export interface ApiKey {
 }
 
 export interface UsageData {
-  monthlyTotal: number
-  monthlyLimit: number
+  creditsUsed: number
+  creditsLimit: number
+  overageCredits: number
+  billingCycleStart: string
+  billingCycleEnd: string
   dailyCounts: { date: string; count: number }[]
   recentRequests: {
     endpoint: string
     method: string
     statusCode: number
     responseTimeMs: number
+    creditsConsumed?: number
     timestamp: string
   }[]
 }
@@ -125,15 +156,41 @@ export interface UsageData {
 export interface PlanData {
   currentTier: string
   tierConfig: Record<string, unknown>
+  creditsUsed: number
+  creditsRemaining: number
+  overageCredits: number
+  overageCost: number
+  autoUpgrade: boolean
+  cardOnFile: boolean
+  billingCycleEnd: string
   allTiers: {
     id: string
     label: string
-    requestsPerMonth: number
+    creditsPerMonth: number
     requestsPerMinute: number
+    priceMonthly: number | null
+    overageRate: number | null
     edgeAccess: boolean
     playByPlay: boolean
     injuryAccess: boolean
+    booksPerRequest: number
+    historicalDays: number
     sports: string | string[]
     [key: string]: unknown
   }[]
+}
+
+export interface BillingStatus {
+  tier: string
+  tierConfig: Record<string, unknown>
+  autoUpgrade: boolean
+  cardOnFile: boolean
+  creditsUsed: number
+  creditsLimit: number
+  overageCredits: number
+  overageCost: number
+  billingCycleEnd: string | null
+  stripeCustomerId: string | null
+  nextTier: string | null
+  upgradeCost: number | null
 }

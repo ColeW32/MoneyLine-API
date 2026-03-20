@@ -15,7 +15,7 @@ export default function OddsEndpointsPage() {
         method="GET"
         path="/v1/odds"
         description="Browse all odds with filtering by league, market, and bookmaker."
-        tier="hobbyist"
+        tier="starter"
         params={[
           {
             name: 'league',
@@ -75,7 +75,7 @@ export default function OddsEndpointsPage() {
         method="GET"
         path="/v1/events/:eventId/odds"
         description="Get odds for a specific event. The number of bookmakers returned depends on your tier."
-        tier="hobbyist"
+        tier="starter"
         params={[
           {
             name: 'eventId',
@@ -91,7 +91,7 @@ export default function OddsEndpointsPage() {
         method="GET"
         path="/v1/odds/bookmakers"
         description="List all available sportsbooks tracked by MoneyLine."
-        tier="hobbyist"
+        tier="starter"
         response={`{
   "success": true,
   "data": {
