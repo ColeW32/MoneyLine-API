@@ -57,7 +57,7 @@ export default function DashboardOverview() {
           ) : null}
           {usage?.billingCycleEnd && (
             <p className="text-xs text-zinc-500 mt-1">
-              Resets {new Date(usage.billingCycleEnd).toLocaleDateString()}
+              Resets {new Date(usage.billingCycleEnd).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
             </p>
           )}
         </div>

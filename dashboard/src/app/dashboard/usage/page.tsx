@@ -25,7 +25,7 @@ export default function UsagePage() {
         <h1 className="text-2xl font-bold text-white">Usage</h1>
         {usage?.billingCycleStart && usage?.billingCycleEnd && (
           <p className="text-zinc-400 text-sm mt-1">
-            Billing period: {new Date(usage.billingCycleStart).toLocaleDateString()} &mdash; {new Date(usage.billingCycleEnd).toLocaleDateString()}
+            Billing period: {new Date(usage.billingCycleStart).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })} &mdash; {new Date(usage.billingCycleEnd).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
           </p>
         )}
       </div>
