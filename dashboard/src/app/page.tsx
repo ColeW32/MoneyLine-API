@@ -125,8 +125,8 @@ export default function LandingPage() {
       </nav>
 
       {/* Hero */}
-      <section className="px-4 sm:px-6 pt-12 sm:pt-16 lg:pt-24 pb-10 lg:pb-16">
-        <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-start">
+      <section className="pt-12 sm:pt-16 lg:pt-24 pb-10 lg:pb-16">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-start">
           {/* Left — headline */}
           <div>
             <h1 className="text-2xl min-[480px]:text-3xl sm:text-4xl lg:text-6xl font-bold tracking-tight leading-[1.2] ml-text">
@@ -224,8 +224,8 @@ export default function LandingPage() {
       </div>
 
       {/* Stats / Social proof */}
-      <section className="py-10 sm:py-16 px-4 sm:px-6 border-b border-[#e0e0e0]">
-        <div className="max-w-6xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
+      <section className="py-10 sm:py-16 border-b border-[#e0e0e0]">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
           {[
             { num: '9+', label: 'Sportsbooks' },
             { num: '12', label: 'Leagues covered' },
@@ -241,8 +241,8 @@ export default function LandingPage() {
       </section>
 
       {/* Features */}
-      <section className="py-10 sm:py-16 lg:py-24 px-4 sm:px-6 ml-section-bg">
-        <div className="max-w-6xl mx-auto">
+      <section className="py-10 sm:py-16 lg:py-24 ml-section-bg">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <h2 className="text-2xl min-[480px]:text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight leading-[1.15] ml-text max-w-3xl">
             The API, at a glance.
           </h2>
@@ -269,8 +269,8 @@ export default function LandingPage() {
       </section>
 
       {/* Dark section — One API */}
-      <section className="ml-dark-bg py-10 sm:py-16 lg:py-24 px-4 sm:px-6">
-        <div className="max-w-6xl mx-auto text-center">
+      <section className="ml-dark-bg py-10 sm:py-16 lg:py-24">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 text-center">
           <h2 className="text-2xl min-[480px]:text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-white">
             One API. Every book.
           </h2>
@@ -288,8 +288,8 @@ export default function LandingPage() {
       </section>
 
       {/* Pricing */}
-      <section id="pricing" className="py-10 sm:py-16 lg:py-24 px-4 sm:px-6 ml-page-bg">
-        <div className="max-w-6xl mx-auto">
+      <section id="pricing" className="py-10 sm:py-16 lg:py-24 ml-page-bg">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <h2 className="text-2xl min-[480px]:text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight ml-text">
             Simple, credit-based pricing.
           </h2>
@@ -411,8 +411,8 @@ export default function LandingPage() {
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-[#e0e0e0] py-8 px-4 ml-page-bg">
-        <div className="max-w-6xl mx-auto text-center text-sm ml-text-gray">
+      <footer className="border-t border-[#e0e0e0] py-8 ml-page-bg">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 text-center text-sm ml-text-gray">
           <span className="font-bold ml-text">Money<span className="text-[#6b7280] font-light">\</span>Line</span>
           {' '}&mdash; Unified Sports Data API
         </div>

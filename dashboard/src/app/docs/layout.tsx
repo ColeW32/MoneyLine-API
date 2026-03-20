@@ -12,7 +12,7 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
     <div className="min-h-screen ml-page-bg" style={{ fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif' }}>
       {/* Top nav */}
       <nav className="sticky top-0 z-50 border-b border-[#e0e0e0] bg-[#f5f2eb]/95 backdrop-blur-sm">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
           <Link href="/" className="text-lg font-bold ml-text tracking-tight">
             Money <span className="text-[#6b7280] font-light">\</span> Line
           </Link>
