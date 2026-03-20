@@ -51,6 +51,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = usePathname()
   const router = useRouter()
   const [collapsed, setCollapsed] = useState(false)
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
 
   useEffect(() => {
     if (!loading && !user) router.push('/login')
@@ -117,7 +118,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {/* Logout at bottom */}
         <div className="p-2">
           <button
-            onClick={logout}
+            onClick={() => setShowLogoutConfirm(true)}
             title={collapsed ? 'Log out' : undefined}
             className={`flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm text-[#6b7280] hover:bg-[#e8e6e0] hover:text-[#1a1a1a] transition-colors ${collapsed ? 'justify-center' : ''}`}
           >
@@ -128,6 +129,33 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </button>
         </div>
       </aside>
+
+      {/* Logout confirmation modal */}
+      {showLogoutConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowLogoutConfirm(false)} />
+          <div className="relative bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm mx-4">
+            <h3 className="text-lg font-semibold text-[#1a1a1a]">Log out?</h3>
+            <p className="text-sm text-[#6b7280] mt-2">
+              Are you sure you want to log out of your account?
+            </p>
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setShowLogoutConfirm(false)}
+                className="flex-1 px-4 py-2 text-sm font-medium text-[#4a4a4a] bg-[#f0eeea] hover:bg-[#e8e6e0] rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => { setShowLogoutConfirm(false); logout() }}
+                className="flex-1 px-4 py-2 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
+              >
+                Log out
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Main area */}
       <div className="flex-1 flex flex-col h-screen">
