@@ -25,7 +25,25 @@ const fastify = Fastify({
 })
 
 // --- Plugins ---
-await fastify.register(cors, { origin: true })
+const DASHBOARD_ORIGINS = [
+  'https://moneylineapp.com',
+  'https://www.moneylineapp.com',
+  'http://localhost:3001',
+]
+
+await fastify.register(cors, {
+  origin: true,        // /v1 is a public API — open to all origins
+  credentials: true,   // allow cookies/auth headers from dashboard
+})
+
+// Block browser requests to dashboard routes from unknown origins
+fastify.addHook('onRequest', async (request, reply) => {
+  if (!request.url.startsWith('/manage') && !request.url.startsWith('/auth')) return
+  const origin = request.headers.origin
+  if (origin && !DASHBOARD_ORIGINS.includes(origin)) {
+    return reply.code(403).send({ success: false, error: { message: 'Forbidden', statusCode: 403 } })
+  }
+})
 await fastify.register(helmet, { global: true })
 
 // --- Tier gate (must register before routes) ---
