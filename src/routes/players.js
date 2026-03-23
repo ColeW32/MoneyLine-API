@@ -31,7 +31,7 @@ export default async function playerRoutes(fastify) {
   // GET /v1/players/:playerId/stats
   fastify.get('/v1/players/:playerId/stats', async (request, reply) => {
     const { playerId } = request.params
-    const { type, season, date, from, to } = request.query
+    const { type, season, date, from, to, eventId } = request.query
     const player = await getCollection('players').findOne(
       { playerId },
       { projection: { _id: 0, playerId: 1, leagueId: 1 } }
@@ -58,6 +58,10 @@ export default async function playerRoutes(fastify) {
       return reply.code(400).send(error('Date filters are only supported when type=game.', 400))
     }
 
+    if (statType === 'season' && eventId) {
+      return reply.code(400).send(error('eventId is only supported when type=game.', 400))
+    }
+
     const filter = { playerId, statType }
     const currentSeason = getCurrentSeason(player.leagueId)
 
@@ -66,8 +70,12 @@ export default async function playerRoutes(fastify) {
     } else {
       if (season) {
         filter.season = season
-      } else if (!date && !from && !to) {
+      } else if (!eventId && !date && !from && !to) {
         filter.season = currentSeason
+      }
+
+      if (eventId) {
+        filter.eventId = eventId
       }
 
       if (date) {
@@ -110,6 +118,7 @@ export default async function playerRoutes(fastify) {
       type: statType,
       count: stats.length,
       ...(filter.season && { season: filter.season }),
+      ...(filter.eventId && { eventId: filter.eventId }),
     })
   })
 }

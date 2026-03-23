@@ -1,12 +1,11 @@
 import cron from 'node-cron'
 import { getCollection } from '../db.js'
-import { SPORTS, getAllLeagueIds } from '../config/sports.js'
-import { fetchScores, fetchStandings, fetchRoster, fetchInjuries, fetchStats } from './fetchers/goalserve.js'
+import { SPORTS, getAllLeagueIds, getCurrentSeason, getSeasonStartDate } from '../config/sports.js'
+import { fetchScores, fetchStandings, fetchRoster, fetchInjuries } from './fetchers/goalserve.js'
 import { fetchOdds } from './fetchers/oddsApi.js'
 import { getNormalizer } from './normalizers/index.js'
 import { calculateEdges } from './edgeCalculator.js'
-
-const DEBUGGED_STATS_LEAGUES = new Set()
+import { buildSeasonDoc } from './normalizers/shared.js'
 
 /**
  * Upsert an array of normalized documents into a collection.
@@ -29,188 +28,60 @@ function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms))
 }
 
-function isObject(value) {
-  return value != null && typeof value === 'object' && !Array.isArray(value)
+function formatGoalserveDate(date) {
+  const dd = String(date.getUTCDate()).padStart(2, '0')
+  const mm = String(date.getUTCMonth() + 1).padStart(2, '0')
+  const yyyy = date.getUTCFullYear()
+  return `${dd}.${mm}.${yyyy}`
 }
 
-function clipString(value, max = 180) {
-  const str = typeof value === 'string' ? value : JSON.stringify(value)
-  if (!str) return null
-  return str.length > max ? `${str.slice(0, max)}...` : str
+function startOfUtcDay(date) {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()))
 }
 
-function summarizeNode(node) {
-  if (Array.isArray(node)) {
-    return {
-      type: 'array',
-      length: node.length,
-      firstItemKeys: isObject(node[0]) ? Object.keys(node[0]).slice(0, 20) : null,
-      firstItemPreview: clipString(node[0], 220),
-    }
+function buildDateRange(startDate, endDate) {
+  const dates = []
+  const cursor = startOfUtcDay(startDate)
+  const end = startOfUtcDay(endDate)
+
+  while (cursor <= end) {
+    dates.push(new Date(cursor))
+    cursor.setUTCDate(cursor.getUTCDate() + 1)
   }
 
-  if (isObject(node)) {
-    return {
-      type: 'object',
-      keys: Object.keys(node).slice(0, 25),
-      preview: clipString(node, 260),
-    }
-  }
-
-  return {
-    type: typeof node,
-    value: clipString(node, 120),
-  }
+  return dates
 }
 
-function collectCandidateNodes(node, predicate, path = 'root', seen = new WeakSet(), results = [], max = 6) {
-  if (results.length >= max) return results
-  if (!isObject(node) && !Array.isArray(node)) return results
-
-  if (isObject(node)) {
-    if (seen.has(node)) return results
-    seen.add(node)
-
-    if (predicate(node)) {
-      results.push({
-        path,
-        ...summarizeNode(node),
-      })
-      if (results.length >= max) return results
-    }
-
-    for (const [key, value] of Object.entries(node)) {
-      collectCandidateNodes(value, predicate, `${path}.${key}`, seen, results, max)
-      if (results.length >= max) break
-    }
-    return results
-  }
-
-  node.forEach((item, index) => {
-    if (results.length >= max) return
-    collectCandidateNodes(item, predicate, `${path}[${index}]`, seen, results, max)
-  })
-
-  return results
+function getRecentStatsDates() {
+  const today = startOfUtcDay(new Date())
+  const yesterday = new Date(today)
+  yesterday.setUTCDate(yesterday.getUTCDate() - 1)
+  return [today, yesterday]
 }
 
-function collectInterestingFields(node, path = 'root', seen = new WeakSet(), results = [], max = 12) {
-  if (results.length >= max) return results
-  if (!isObject(node) && !Array.isArray(node)) return results
+async function rebuildSeasonDocs(playerSeasonKeys) {
+  const col = getCollection('player_stats')
+  let seasonCount = 0
 
-  const INTERESTING_KEYS = new Set([
-    'date',
-    'game_date',
-    'datetime',
-    'datetime_utc',
-    'event_id',
-    'game_id',
-    'match_id',
-    'opponent',
-    'opponent_name',
-    'vs',
-    'player_id',
-    'player_name',
-  ])
+  for (const key of playerSeasonKeys) {
+    const [playerId, season] = key.split('::')
+    const gameDocs = await col
+      .find({ playerId, season, statType: 'game' }, { projection: { _id: 0 } })
+      .sort({ gameDate: 1, updatedAt: 1 })
+      .toArray()
 
-  if (isObject(node)) {
-    if (seen.has(node)) return results
-    seen.add(node)
+    if (gameDocs.length === 0) continue
 
-    for (const [key, value] of Object.entries(node)) {
-      if (INTERESTING_KEYS.has(key) && results.length < max) {
-        results.push({
-          path: `${path}.${key}`,
-          value: clipString(value, 120),
-        })
-      }
-      if (results.length >= max) break
-      collectInterestingFields(value, `${path}.${key}`, seen, results, max)
-      if (results.length >= max) break
-    }
-    return results
+    const seasonDoc = buildSeasonDoc(gameDocs[0], gameDocs)
+    await col.updateOne(
+      { playerId, statType: 'season', season },
+      { $set: seasonDoc },
+      { upsert: true }
+    )
+    seasonCount++
   }
 
-  node.forEach((item, index) => {
-    if (results.length >= max) return
-    collectInterestingFields(item, `${path}[${index}]`, seen, results, max)
-  })
-
-  return results
-}
-
-function buildStatsDebugSummary(raw) {
-  const rootKeys = isObject(raw) ? Object.keys(raw).slice(0, 30) : null
-  const teamCandidates = collectCandidateNodes(
-    raw,
-    (node) => isObject(node) && (
-      node.player != null
-      || node.players != null
-      || node.game != null
-      || node.games != null
-      || node.match != null
-      || node.matches != null
-      || node.stats != null
-    ),
-    'root',
-    new WeakSet(),
-    [],
-    8
-  )
-
-  const playerCandidates = collectCandidateNodes(
-    raw,
-    (node) => isObject(node) && (
-      node.player_id != null
-      || node.player_name != null
-      || node.firstname != null
-      || node.lastname != null
-      || node.first_name != null
-      || node.last_name != null
-      || node.position != null
-    ),
-    'root',
-    new WeakSet(),
-    [],
-    8
-  )
-
-  const gameCandidates = collectCandidateNodes(
-    raw,
-    (node) => isObject(node) && (
-      node.date != null
-      || node.game_date != null
-      || node.datetime != null
-      || node.datetime_utc != null
-      || node.event_id != null
-      || node.game_id != null
-      || node.match_id != null
-    ),
-    'root',
-    new WeakSet(),
-    [],
-    8
-  )
-
-  return {
-    rootType: Array.isArray(raw) ? 'array' : typeof raw,
-    rootKeys,
-    topLevelPreview: clipString(raw, 500),
-    teamCandidates,
-    playerCandidates,
-    gameCandidates,
-    interestingFields: collectInterestingFields(raw),
-  }
-}
-
-function logStatsPayloadDebugOnce(leagueId, teamAbbr, raw) {
-  if (DEBUGGED_STATS_LEAGUES.has(leagueId) || !raw) return
-  DEBUGGED_STATS_LEAGUES.add(leagueId)
-
-  const summary = buildStatsDebugSummary(raw)
-  console.log(
-    `[scheduler][stats-debug][${leagueId}] team=${teamAbbr} ${JSON.stringify(summary)}`
-  )
+  return seasonCount
 }
 
 // --- Generic job handlers ---
@@ -311,43 +182,46 @@ async function jobInjuries(config) {
   console.log(`[scheduler] Upserted ${count} ${tag} injury reports`)
 }
 
-async function jobPlayerStats(config) {
+async function jobPlayerStats(config, { backfill = false } = {}) {
   const tag = config.leagueId.toUpperCase()
-  console.log(`[scheduler] Running ${tag} player stats job...`)
+  console.log(`[scheduler] Running ${tag} player stats job${backfill ? ' (backfill)' : ''}...`)
   let gameCount = 0
-  let seasonCount = 0
 
   const normalizer = getNormalizer(config.leagueId)
+  const playerSeasonKeys = new Set()
+  const dates = backfill
+    ? buildDateRange(getSeasonStartDate(config.leagueId, getCurrentSeason(config.leagueId)), new Date())
+    : getRecentStatsDates()
 
-  for (const abbr of config.teamAbbrs) {
-    const raw = await fetchStats(config, abbr)
+  for (const date of dates) {
+    const raw = await fetchScores(config, formatGoalserveDate(date))
     if (!raw) continue
-    logStatsPayloadDebugOnce(config.leagueId, abbr, raw)
 
-    const result = await normalizer.normalizePlayerStats(raw, abbr)
-    if (!result) continue
+    const historicalEvents = await normalizer.normalizeScores(raw)
+    if (historicalEvents.length > 0) {
+      await upsertMany('events', historicalEvents, 'eventId')
+    }
 
-    for (const doc of result.games || []) {
+    const result = await normalizer.normalizePlayerStatsFromScores?.(raw)
+    if (!result?.games?.length) {
+      await sleep(100)
+      continue
+    }
+
+    for (const doc of result.games) {
       await getCollection('player_stats').updateOne(
         { playerId: doc.playerId, statType: 'game', eventId: doc.eventId },
         { $set: doc },
         { upsert: true }
       )
       gameCount++
+      playerSeasonKeys.add(`${doc.playerId}::${doc.season}`)
     }
 
-    for (const doc of result.seasons || []) {
-      await getCollection('player_stats').updateOne(
-        { playerId: doc.playerId, statType: 'season', season: doc.season },
-        { $set: doc },
-        { upsert: true }
-      )
-      seasonCount++
-    }
-
-    await sleep(200)
+    await sleep(100)
   }
 
+  const seasonCount = await rebuildSeasonDocs(playerSeasonKeys)
   console.log(`[scheduler] Upserted ${gameCount} ${tag} player game logs and ${seasonCount} season docs`)
 }
 
@@ -436,6 +310,6 @@ export function startScheduler() {
     const config = SPORTS[leagueId]
     jobScores(config).catch((e) => console.error(`[scheduler] Initial ${leagueId} scores failed:`, e.message))
     jobStandings(config).catch((e) => console.error(`[scheduler] Initial ${leagueId} standings failed:`, e.message))
-    jobPlayerStats(config).catch((e) => console.error(`[scheduler] Initial ${leagueId} player stats failed:`, e.message))
+    jobPlayerStats(config, { backfill: true }).catch((e) => console.error(`[scheduler] Initial ${leagueId} player stats failed:`, e.message))
   }
 }

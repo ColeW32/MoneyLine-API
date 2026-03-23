@@ -18,6 +18,60 @@ export function parseDateTime(dtStr) {
   return new Date(`${yyyy}-${mm}-${dd}T${hh}:${min}:00Z`)
 }
 
+export function toArray(value) {
+  if (value == null) return []
+  return Array.isArray(value) ? value : [value]
+}
+
+export function parseNumericValue(value) {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null
+  if (typeof value !== 'string') return null
+
+  const trimmed = value.trim()
+  if (!trimmed || trimmed === '--') return null
+
+  if (/^[-+]?\d+(\.\d+)?$/.test(trimmed) || /^[-+]?\.\d+$/.test(trimmed)) {
+    return Number(trimmed)
+  }
+
+  if (/^\d+:\d+$/.test(trimmed)) {
+    const [mins, secs] = trimmed.split(':').map(Number)
+    return mins * 60 + secs
+  }
+
+  return null
+}
+
+export function normalizeFlatStats(row, { excludeKeys = [], keyMap = {}, valueParsers = {} } = {}) {
+  if (!isObject(row)) return null
+
+  const result = {}
+  const exclude = new Set(excludeKeys)
+
+  for (const [key, value] of Object.entries(row)) {
+    if (exclude.has(key)) continue
+
+    const parser = valueParsers[key] || parseNumericValue
+    const normalized = parser(value, row)
+    if (normalized == null) continue
+
+    result[keyMap[key] || key] = normalized
+  }
+
+  return Object.keys(result).length > 0 ? result : null
+}
+
+export function getGameResult(homeScore, awayScore, side) {
+  const home = Number(homeScore)
+  const away = Number(awayScore)
+  if (!Number.isFinite(home) || !Number.isFinite(away)) return null
+  if (home === away) return 'T'
+
+  const isHome = side === 'hometeam'
+  const won = isHome ? home > away : away > home
+  return won ? 'W' : 'L'
+}
+
 /**
  * Normalize odds from The Odds API to MoneyLine schema.
  * Parameterized by leagueId and sport.
@@ -332,7 +386,7 @@ async function resolveEventId({
   return `${leagueId}-stat-${playerId}-${dateKey}-${String(fallbackIndex).padStart(3, '0')}`
 }
 
-function buildSeasonDoc(baseDoc, gameDocs) {
+export function buildSeasonDoc(baseDoc, gameDocs) {
   const stats = {}
   let latestUpdate = baseDoc.updatedAt
   let latestSourceUpdate = baseDoc.sourceUpdatedAt

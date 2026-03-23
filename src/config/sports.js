@@ -120,3 +120,14 @@ export function getSeasonForDate(leagueId, dateInput) {
   }
   return `${year}-${String(year + 1).slice(2)}`
 }
+
+export function getSeasonStartDate(leagueId, season = getCurrentSeason(leagueId)) {
+  const config = SPORTS[leagueId]
+
+  if (config.season.format === 'year') {
+    return new Date(Date.UTC(Number(season), config.season.startMonth, 1))
+  }
+
+  const [startYear] = String(season).split('-')
+  return new Date(Date.UTC(Number(startYear), config.season.startMonth, 1))
+}

@@ -153,6 +153,7 @@ export default function TeamsPlayersPage() {
           { name: 'playerId', type: 'string', required: true, description: 'The unique identifier of the player.' },
           { name: 'type', type: 'string', required: false, description: 'Stat type: "season" or "game". Defaults to season.' },
           { name: 'season', type: 'string', required: false, description: 'Season identifier (e.g. "2025"). Defaults to the current season.' },
+          { name: 'eventId', type: 'string', required: false, description: 'For type=game only. Filter to one exact event ID.' },
           { name: 'date', type: 'string', required: false, description: 'For type=game only. Exact date in YYYY-MM-DD.' },
           { name: 'from', type: 'string', required: false, description: 'For type=game only. Inclusive start date/time in YYYY-MM-DD or ISO 8601.' },
           { name: 'to', type: 'string', required: false, description: 'For type=game only. Inclusive end date/time in YYYY-MM-DD or ISO 8601.' },
@@ -191,8 +192,9 @@ export default function TeamsPlayersPage() {
         <ul className="mt-2 list-disc pl-5 space-y-1 text-[13px] leading-relaxed text-[#4a4a4a]">
           <li>If you omit <code className="text-[12px] bg-[#f0ede6] px-1 py-0.5 rounded font-mono">type</code>, the API returns season summaries.</li>
           <li><code className="text-[12px] bg-[#f0ede6] px-1 py-0.5 rounded font-mono">type=season</code> supports <code className="text-[12px] bg-[#f0ede6] px-1 py-0.5 rounded font-mono">season</code> only.</li>
-          <li><code className="text-[12px] bg-[#f0ede6] px-1 py-0.5 rounded font-mono">type=game</code> supports <code className="text-[12px] bg-[#f0ede6] px-1 py-0.5 rounded font-mono">season</code>, <code className="text-[12px] bg-[#f0ede6] px-1 py-0.5 rounded font-mono">date</code>, <code className="text-[12px] bg-[#f0ede6] px-1 py-0.5 rounded font-mono">from</code>, and <code className="text-[12px] bg-[#f0ede6] px-1 py-0.5 rounded font-mono">to</code>.</li>
+          <li><code className="text-[12px] bg-[#f0ede6] px-1 py-0.5 rounded font-mono">type=game</code> supports <code className="text-[12px] bg-[#f0ede6] px-1 py-0.5 rounded font-mono">season</code>, <code className="text-[12px] bg-[#f0ede6] px-1 py-0.5 rounded font-mono">eventId</code>, <code className="text-[12px] bg-[#f0ede6] px-1 py-0.5 rounded font-mono">date</code>, <code className="text-[12px] bg-[#f0ede6] px-1 py-0.5 rounded font-mono">from</code>, and <code className="text-[12px] bg-[#f0ede6] px-1 py-0.5 rounded font-mono">to</code>.</li>
           <li><code className="text-[12px] bg-[#f0ede6] px-1 py-0.5 rounded font-mono">date</code> cannot be combined with <code className="text-[12px] bg-[#f0ede6] px-1 py-0.5 rounded font-mono">from</code> or <code className="text-[12px] bg-[#f0ede6] px-1 py-0.5 rounded font-mono">to</code>.</li>
+          <li>Use <code className="text-[12px] bg-[#f0ede6] px-1 py-0.5 rounded font-mono">eventId</code> when you want the stat line for one exact game.</li>
           <li><code className="text-[12px] bg-[#f0ede6] px-1 py-0.5 rounded font-mono">type=career</code> is not supported in this version.</li>
         </ul>
       </div>

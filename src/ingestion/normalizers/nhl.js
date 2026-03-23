@@ -1,10 +1,13 @@
 import { getMoneylineId } from '../idMapper.js'
 import {
   parseDateTime,
+  toArray,
+  normalizeFlatStats,
+  getGameResult,
   normalizeOdds as sharedNormalizeOdds,
   normalizePlayerStats as sharedNormalizePlayerStats,
 } from './shared.js'
-import { getCurrentSeason } from '../../config/sports.js'
+import { getCurrentSeason, getSeasonForDate } from '../../config/sports.js'
 
 const SOURCE = 'goalserve'
 const SPORT = 'hockey'
@@ -227,6 +230,119 @@ export async function normalizeInjuries(raw, gsTeamAbbr) {
   }
 
   return { teamId, leagueId: LEAGUE, updatedAt: new Date(), players }
+}
+
+function mergePlayerGameEntry(target, patch) {
+  for (const [key, value] of Object.entries(patch)) {
+    if (value == null) continue
+    if (typeof value === 'object' && !Array.isArray(value)) {
+      target[key] = { ...(target[key] || {}), ...value }
+    } else if (target[key] == null) {
+      target[key] = value
+    }
+  }
+}
+
+export async function normalizePlayerStatsFromScores(raw) {
+  if (!raw?.scores?.category?.match) return { games: [] }
+
+  const matches = toArray(raw.scores.category.match)
+  const games = []
+
+  for (const match of matches) {
+    if (!match?.player_stats && !match?.goalkeeper_stats) continue
+
+    const eventId = await getMoneylineId(SOURCE, match.id, 'event', SPORT)
+    const gameDate = parseDateTime(match.datetime_utc)
+    const season = getSeasonForDate(LEAGUE, gameDate)
+    const sourceUpdatedAt = new Date()
+
+    for (const side of ['hometeam', 'awayteam']) {
+      const opponentSide = side === 'hometeam' ? 'awayteam' : 'hometeam'
+      const teamNode = match[side]
+      if (!teamNode?.id) continue
+
+      const teamId = await getMoneylineId(SOURCE, teamNode.id, 'team', SPORT, teamNode.name)
+      const byPlayer = new Map()
+
+      for (const row of toArray(match.player_stats?.[side]?.player)) {
+        if (!row?.id || !row?.name) continue
+        const skaterStats = normalizeFlatStats(row, {
+          excludeKeys: ['id', 'name', 'pos'],
+          keyMap: {
+            shitfs: 'shifts',
+            short_handed_time_on_id: 'short_handed_time_on_ice',
+          },
+        })
+        if (!skaterStats) continue
+
+        const playerId = await getMoneylineId(SOURCE, row.id, 'player', SPORT, row.name)
+        if (!byPlayer.has(playerId)) {
+          byPlayer.set(playerId, {
+            playerId,
+            playerName: row.name,
+            position: row.pos || null,
+            stats: {},
+          })
+        }
+        mergePlayerGameEntry(byPlayer.get(playerId), {
+          position: row.pos || byPlayer.get(playerId).position,
+          stats: {
+            skater: skaterStats,
+          },
+        })
+      }
+
+      for (const row of toArray(match.goalkeeper_stats?.[side]?.player)) {
+        if (!row?.id || !row?.name) continue
+        const goalkeepingStats = normalizeFlatStats(row, {
+          excludeKeys: ['id', 'name', 'credit'],
+        })
+        if (!goalkeepingStats) continue
+
+        const playerId = await getMoneylineId(SOURCE, row.id, 'player', SPORT, row.name)
+        if (!byPlayer.has(playerId)) {
+          byPlayer.set(playerId, {
+            playerId,
+            playerName: row.name,
+            position: 'G',
+            stats: {},
+          })
+        }
+        mergePlayerGameEntry(byPlayer.get(playerId), {
+          position: byPlayer.get(playerId).position || 'G',
+          stats: {
+            goalkeeping: goalkeepingStats,
+          },
+        })
+      }
+
+      for (const player of byPlayer.values()) {
+        if (!player.stats?.skater && !player.stats?.goalkeeping) continue
+
+        games.push({
+          playerId: player.playerId,
+          playerName: player.playerName,
+          teamId,
+          leagueId: LEAGUE,
+          sport: SPORT,
+          season,
+          statType: 'game',
+          eventId,
+          gameDate,
+          opponent: match[opponentSide]?.name || null,
+          homeAway: side === 'hometeam' ? 'home' : 'away',
+          result: getGameResult(match.hometeam?.totalscore, match.awayteam?.totalscore, side),
+          position: player.position,
+          stats: player.stats,
+          sourceUpdatedAt,
+          updatedAt: new Date(),
+        })
+      }
+    }
+  }
+
+  return { games }
 }
 
 export function normalizePlayerStats(raw, gsTeamAbbr) {

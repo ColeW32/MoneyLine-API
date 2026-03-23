@@ -1,10 +1,13 @@
 import { getMoneylineId } from '../idMapper.js'
 import {
   parseDateTime,
+  toArray,
+  normalizeFlatStats,
+  getGameResult,
   normalizeOdds as sharedNormalizeOdds,
   normalizePlayerStats as sharedNormalizePlayerStats,
 } from './shared.js'
-import { getCurrentSeason } from '../../config/sports.js'
+import { getCurrentSeason, getSeasonForDate } from '../../config/sports.js'
 
 const SOURCE = 'goalserve'
 const SPORT = 'baseball'
@@ -231,6 +234,116 @@ export async function normalizeInjuries(raw, gsTeamAbbr) {
   }
 
   return { teamId, leagueId: LEAGUE, updatedAt: new Date(), players }
+}
+
+function mergePlayerGameEntry(target, patch) {
+  for (const [key, value] of Object.entries(patch)) {
+    if (value == null) continue
+    if (typeof value === 'object' && !Array.isArray(value)) {
+      target[key] = { ...(target[key] || {}), ...value }
+    } else if (target[key] == null) {
+      target[key] = value
+    }
+  }
+}
+
+export async function normalizePlayerStatsFromScores(raw) {
+  if (!raw?.scores?.category?.match) return { games: [] }
+
+  const matches = toArray(raw.scores.category.match)
+  const games = []
+
+  for (const match of matches) {
+    const hitters = match?.stats?.hitters
+    const pitchers = match?.stats?.pitchers
+    if (!hitters && !pitchers) continue
+
+    const eventId = await getMoneylineId(SOURCE, match.id, 'event', SPORT)
+    const gameDate = parseDateTime(match.datetime_utc)
+    const season = getSeasonForDate(LEAGUE, gameDate)
+    const sourceUpdatedAt = new Date()
+
+    for (const side of ['hometeam', 'awayteam']) {
+      const opponentSide = side === 'hometeam' ? 'awayteam' : 'hometeam'
+      const teamNode = match[side]
+      if (!teamNode?.id) continue
+
+      const teamId = await getMoneylineId(SOURCE, teamNode.id, 'team', SPORT, teamNode.name)
+      const byPlayer = new Map()
+
+      for (const row of toArray(hitters?.[side]?.player)) {
+        if (!row?.id || !row?.name) continue
+        const hittingStats = normalizeFlatStats(row, {
+          excludeKeys: ['id', 'name', 'pos'],
+        })
+        if (!hittingStats) continue
+
+        const playerId = await getMoneylineId(SOURCE, row.id, 'player', SPORT, row.name)
+        if (!byPlayer.has(playerId)) {
+          byPlayer.set(playerId, {
+            playerId,
+            playerName: row.name,
+            position: row.pos || null,
+            stats: {},
+          })
+        }
+        mergePlayerGameEntry(byPlayer.get(playerId), {
+          position: row.pos || byPlayer.get(playerId).position,
+          stats: {
+            hitting: hittingStats,
+          },
+        })
+      }
+
+      for (const row of toArray(pitchers?.[side]?.player)) {
+        if (!row?.id || !row?.name) continue
+        const pitchingStats = normalizeFlatStats(row, {
+          excludeKeys: ['id', 'name', 'win', 'loss', 'pc-st'],
+        })
+        if (!pitchingStats) continue
+
+        const playerId = await getMoneylineId(SOURCE, row.id, 'player', SPORT, row.name)
+        if (!byPlayer.has(playerId)) {
+          byPlayer.set(playerId, {
+            playerId,
+            playerName: row.name,
+            position: null,
+            stats: {},
+          })
+        }
+        mergePlayerGameEntry(byPlayer.get(playerId), {
+          stats: {
+            pitching: pitchingStats,
+          },
+        })
+      }
+
+      for (const player of byPlayer.values()) {
+        if (!player.stats?.hitting && !player.stats?.pitching) continue
+
+        games.push({
+          playerId: player.playerId,
+          playerName: player.playerName,
+          teamId,
+          leagueId: LEAGUE,
+          sport: SPORT,
+          season,
+          statType: 'game',
+          eventId,
+          gameDate,
+          opponent: match[opponentSide]?.name || null,
+          homeAway: side === 'hometeam' ? 'home' : 'away',
+          result: getGameResult(match.hometeam?.totalscore, match.awayteam?.totalscore, side),
+          position: player.position,
+          stats: player.stats,
+          sourceUpdatedAt,
+          updatedAt: new Date(),
+        })
+      }
+    }
+  }
+
+  return { games }
 }
 
 export function normalizePlayerStats(raw, gsTeamAbbr) {

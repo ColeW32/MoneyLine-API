@@ -1,10 +1,13 @@
 import { getMoneylineId } from '../idMapper.js'
 import {
   parseDateTime,
+  toArray,
+  normalizeFlatStats,
+  getGameResult,
   normalizeOdds as sharedNormalizeOdds,
   normalizePlayerStats as sharedNormalizePlayerStats,
 } from './shared.js'
-import { getCurrentSeason } from '../../config/sports.js'
+import { getCurrentSeason, getSeasonForDate } from '../../config/sports.js'
 
 const SOURCE = 'goalserve'
 const SPORT = 'basketball'
@@ -218,6 +221,66 @@ export async function normalizeInjuries(raw, gsTeamAbbr) {
   }
 
   return { teamId, leagueId: LEAGUE, updatedAt: new Date(), players }
+}
+
+export async function normalizePlayerStatsFromScores(raw) {
+  if (!raw?.scores?.category?.match) return { games: [] }
+
+  const matches = toArray(raw.scores.category.match)
+  const games = []
+
+  for (const match of matches) {
+    if (!match?.player_stats) continue
+
+    const eventId = await getMoneylineId(SOURCE, match.id, 'event', SPORT)
+    const gameDate = parseDateTime(match.datetime_utc)
+    const season = getSeasonForDate(LEAGUE, gameDate)
+    const sourceUpdatedAt = new Date()
+
+    for (const side of ['hometeam', 'awayteam']) {
+      const opponentSide = side === 'hometeam' ? 'awayteam' : 'hometeam'
+      const teamNode = match[side]
+      if (!teamNode?.id) continue
+
+      const teamId = await getMoneylineId(SOURCE, teamNode.id, 'team', SPORT, teamNode.name)
+      const playerRows = [
+        ...toArray(match.player_stats?.[side]?.starters?.player),
+        ...toArray(match.player_stats?.[side]?.bench?.player),
+      ]
+
+      for (const row of playerRows) {
+        if (!row?.id || !row?.name) continue
+
+        const playerId = await getMoneylineId(SOURCE, row.id, 'player', SPORT, row.odd_name || row.name)
+        const stats = normalizeFlatStats(row, {
+          excludeKeys: ['id', 'name', 'odd_name', 'pos', 'oncourt'],
+        })
+
+        if (!stats) continue
+
+        games.push({
+          playerId,
+          playerName: row.odd_name || row.name,
+          teamId,
+          leagueId: LEAGUE,
+          sport: SPORT,
+          season,
+          statType: 'game',
+          eventId,
+          gameDate,
+          opponent: match[opponentSide]?.name || null,
+          homeAway: side === 'hometeam' ? 'home' : 'away',
+          result: getGameResult(match.hometeam?.totalscore, match.awayteam?.totalscore, side),
+          position: row.pos || null,
+          stats,
+          sourceUpdatedAt,
+          updatedAt: new Date(),
+        })
+      }
+    }
+  }
+
+  return { games }
 }
 
 export function normalizePlayerStats(raw, gsTeamAbbr) {

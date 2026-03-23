@@ -56,7 +56,7 @@ export default function DocsPage() {
       <p className="text-[15px] text-[#4a4a4a] leading-relaxed mb-4">
         MoneyLine provides a comprehensive sports data platform covering four
         major leagues. Here is what you can access, including daily player stat
-        updates for season summaries and game logs:
+        updates for season summaries and event-linked game logs:
       </p>
 
       <div className="grid sm:grid-cols-2 gap-3">
@@ -83,7 +83,7 @@ export default function DocsPage() {
           },
           {
             label: 'Player Game Logs',
-            detail: 'Daily-refreshed player stats by season, exact date, or date range.',
+            detail: 'Daily-refreshed player stats by season, exact event, exact date, or date range.',
           },
           {
             label: 'Injury Reports',

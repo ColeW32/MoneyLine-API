@@ -297,6 +297,7 @@ Get stats for a player.
 |-------|------|---------|-------------|
 | type | string | season | `season` or `game` |
 | season | string | current | Season year (e.g. "2025" or "2025-26") |
+| eventId | string | — | For `type=game` only. Filter to one exact event ID |
 | date | string | — | For `type=game` only. Exact date (`YYYY-MM-DD`) |
 | from | string | — | For `type=game` only. Range start (`YYYY-MM-DD` or ISO 8601) |
 | to | string | — | For `type=game` only. Range end (`YYYY-MM-DD` or ISO 8601) |
@@ -304,6 +305,7 @@ Get stats for a player.
 **Notes:**
 - If `type` is omitted, the API returns season summaries.
 - `type=season` rejects `date`, `from`, and `to`.
+- `type=season` rejects `eventId`.
 - `date` cannot be combined with `from` or `to`.
 - `type=career` is not currently supported.
 - Player stats are refreshed daily.
@@ -480,7 +482,7 @@ curl -H "x-api-key: ml_live_YOUR_KEY" \
 | GET | /v1/teams/:teamId/stats | Free | Team stats |
 | GET | /v1/teams/:teamId/schedule | Free | Team schedule |
 | GET | /v1/players/:playerId | Free | Player details |
-| GET | /v1/players/:playerId/stats | Free | Player stats by season or game/date range |
+| GET | /v1/players/:playerId/stats | Free | Player stats by season, exact event, or game/date range |
 | GET | /v1/odds | Starter | Browse odds |
 | GET | /v1/events/:eventId/odds | Starter | Event odds |
 | GET | /v1/odds/bookmakers | Starter | List bookmakers |
