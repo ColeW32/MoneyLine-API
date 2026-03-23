@@ -1,7 +1,7 @@
 import cron from 'node-cron'
 import { getCollection } from '../db.js'
 import { SPORTS, getAllLeagueIds } from '../config/sports.js'
-import { fetchScores, fetchStandings, fetchRoster, fetchInjuries } from './fetchers/goalserve.js'
+import { fetchScores, fetchStandings, fetchRoster, fetchInjuries, fetchStats } from './fetchers/goalserve.js'
 import { fetchOdds } from './fetchers/oddsApi.js'
 import { getNormalizer } from './normalizers/index.js'
 import { calculateEdges } from './edgeCalculator.js'
@@ -125,6 +125,45 @@ async function jobInjuries(config) {
   console.log(`[scheduler] Upserted ${count} ${tag} injury reports`)
 }
 
+async function jobPlayerStats(config) {
+  const tag = config.leagueId.toUpperCase()
+  console.log(`[scheduler] Running ${tag} player stats job...`)
+  let gameCount = 0
+  let seasonCount = 0
+
+  const normalizer = getNormalizer(config.leagueId)
+
+  for (const abbr of config.teamAbbrs) {
+    const raw = await fetchStats(config, abbr)
+    if (!raw) continue
+
+    const result = await normalizer.normalizePlayerStats(raw, abbr)
+    if (!result) continue
+
+    for (const doc of result.games || []) {
+      await getCollection('player_stats').updateOne(
+        { playerId: doc.playerId, statType: 'game', eventId: doc.eventId },
+        { $set: doc },
+        { upsert: true }
+      )
+      gameCount++
+    }
+
+    for (const doc of result.seasons || []) {
+      await getCollection('player_stats').updateOne(
+        { playerId: doc.playerId, statType: 'season', season: doc.season },
+        { $set: doc },
+        { upsert: true }
+      )
+      seasonCount++
+    }
+
+    await sleep(200)
+  }
+
+  console.log(`[scheduler] Upserted ${gameCount} ${tag} player game logs and ${seasonCount} season docs`)
+}
+
 async function jobOdds(config) {
   if (!process.env.DATA_SOURCE_B_KEY) {
     console.log('[scheduler] Skipping odds job — DATA_SOURCE_B_KEY not set')
@@ -195,10 +234,13 @@ export function startScheduler() {
     // Injuries: every 6 hours, staggered by 1h
     cron.schedule(`${offset} 1,7,13,19 * * *`, () => jobInjuries(config))
 
+    // Player stats: daily
+    cron.schedule(`${offset} 5 * * *`, () => jobPlayerStats(config))
+
     // Rosters: daily at 6 AM
     cron.schedule(`${offset} 6 * * *`, () => jobRosters(config))
 
-    console.log(`  - ${config.name}: scores/odds every 10m, standings/injuries 6h, rosters daily`)
+    console.log(`  - ${config.name}: scores/odds every 10m, standings/injuries 6h, player stats daily, rosters daily`)
   })
 
   // Run initial fetch for all leagues
@@ -207,5 +249,6 @@ export function startScheduler() {
     const config = SPORTS[leagueId]
     jobScores(config).catch((e) => console.error(`[scheduler] Initial ${leagueId} scores failed:`, e.message))
     jobStandings(config).catch((e) => console.error(`[scheduler] Initial ${leagueId} standings failed:`, e.message))
+    jobPlayerStats(config).catch((e) => console.error(`[scheduler] Initial ${leagueId} player stats failed:`, e.message))
   }
 }

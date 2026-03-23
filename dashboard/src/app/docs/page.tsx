@@ -55,7 +55,8 @@ export default function DocsPage() {
       <h2 className="text-xl font-semibold ml-text mt-10 mb-3">What&apos;s Available</h2>
       <p className="text-[15px] text-[#4a4a4a] leading-relaxed mb-4">
         MoneyLine provides a comprehensive sports data platform covering four
-        major leagues. Here is what you can access:
+        major leagues. Here is what you can access, including daily player stat
+        updates for season summaries and game logs:
       </p>
 
       <div className="grid sm:grid-cols-2 gap-3">
@@ -79,6 +80,10 @@ export default function DocsPage() {
           {
             label: 'Team Rosters',
             detail: 'Current rosters with player info for every team.',
+          },
+          {
+            label: 'Player Game Logs',
+            detail: 'Daily-refreshed player stats by season, exact date, or date range.',
           },
           {
             label: 'Injury Reports',

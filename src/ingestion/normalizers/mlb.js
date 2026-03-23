@@ -1,5 +1,9 @@
 import { getMoneylineId } from '../idMapper.js'
-import { parseDateTime, normalizeOdds as sharedNormalizeOdds } from './shared.js'
+import {
+  parseDateTime,
+  normalizeOdds as sharedNormalizeOdds,
+  normalizePlayerStats as sharedNormalizePlayerStats,
+} from './shared.js'
 import { getCurrentSeason } from '../../config/sports.js'
 
 const SOURCE = 'goalserve'
@@ -227,6 +231,16 @@ export async function normalizeInjuries(raw, gsTeamAbbr) {
   }
 
   return { teamId, leagueId: LEAGUE, updatedAt: new Date(), players }
+}
+
+export function normalizePlayerStats(raw, gsTeamAbbr) {
+  return sharedNormalizePlayerStats(raw, {
+    source: SOURCE,
+    sport: SPORT,
+    leagueId: LEAGUE,
+    defaultSeason: getCurrentSeason(LEAGUE),
+    fallbackAbbr: TEAM_ABBR_MAP[gsTeamAbbr] || gsTeamAbbr?.toUpperCase?.() || null,
+  })
 }
 
 export function normalizeOdds(raw) {

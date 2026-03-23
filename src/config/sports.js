@@ -100,10 +100,14 @@ export function getAllLeagueIds() {
 }
 
 export function getCurrentSeason(leagueId) {
+  return getSeasonForDate(leagueId, new Date())
+}
+
+export function getSeasonForDate(leagueId, dateInput) {
   const config = SPORTS[leagueId]
-  const now = new Date()
-  const year = now.getFullYear()
-  const month = now.getMonth() // 0-indexed
+  const date = dateInput instanceof Date ? dateInput : new Date(dateInput)
+  const year = date.getUTCFullYear()
+  const month = date.getUTCMonth() // 0-indexed
 
   if (config.season.format === 'year') {
     // Single calendar year (MLB)

@@ -1,4 +1,5 @@
 import { getCollection } from '../db.js'
+import { getCurrentSeason } from '../config/sports.js'
 import { success, error } from '../utils/response.js'
 
 export default async function teamRoutes(fastify) {
@@ -61,15 +62,27 @@ export default async function teamRoutes(fastify) {
   fastify.get('/v1/teams/:teamId/stats', async (request, reply) => {
     const { teamId } = request.params
     const { season } = request.query
+    const team = await getCollection('teams').findOne(
+      { teamId },
+      { projection: { _id: 0, teamId: 1, leagueId: 1 } }
+    )
 
-    const filter = { teamId, statType: 'season' }
-    if (season) filter.season = season
+    if (!team) {
+      return reply.code(404).send(error(`Team '${teamId}' not found.`, 404))
+    }
+
+    const filter = {
+      teamId,
+      statType: 'season',
+      season: season || getCurrentSeason(team.leagueId),
+    }
 
     const stats = await getCollection('player_stats')
       .find(filter, { projection: { _id: 0 } })
+      .sort({ season: -1, playerName: 1 })
       .toArray()
 
-    return success(stats, { team: teamId, count: stats.length })
+    return success(stats, { team: teamId, season: filter.season, count: stats.length })
   })
 
   // GET /v1/teams/:teamId/schedule
