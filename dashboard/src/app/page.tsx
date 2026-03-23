@@ -87,6 +87,41 @@ const ENDPOINTS = [
   ]
 }`,
   },
+  {
+    method: 'GET',
+    path: '/v1/players/{playerId}/stats',
+    label: 'Season summaries and game logs',
+    example: `GET  /v1/players/nba-p-12345/stats?type=game&eventId=nba-ev-311286
+
+// Response
+{
+  "success": true,
+  "data": [
+    {
+      "playerId": "nba-p-12345",
+      "playerName": "Jayson Tatum",
+      "teamId": "nba-bos",
+      "leagueId": "nba",
+      "sport": "basketball",
+      "season": "2025-26",
+      "statType": "game",
+      "eventId": "nba-ev-311286",
+      "gameDate": "2026-03-09T00:00:00.000Z",
+      "stats": {
+        "points": 32,
+        "rebounds": 8,
+        "assists": 5
+      }
+    }
+  ],
+  "meta": {
+    "player": "nba-p-12345",
+    "type": "game",
+    "season": "2025-26",
+    "count": 1
+  }
+}`,
+  },
 ]
 
 const TICKER_ITEMS = [
