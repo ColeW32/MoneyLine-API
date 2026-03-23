@@ -280,6 +280,7 @@ export function startScheduler() {
   leagues.forEach((leagueId, index) => {
     const config = SPORTS[leagueId]
     const offset = index * 2
+    const leagueMinuteOffset = index * 15
 
     // Scores: every 10 min, staggered
     const scoreMins = Array.from({ length: 6 }, (_, i) => (offset + i * 10) % 60).join(',')
@@ -289,19 +290,19 @@ export function startScheduler() {
     const oddsMins = Array.from({ length: 6 }, (_, i) => (offset + 5 + i * 10) % 60).join(',')
     cron.schedule(`${oddsMins} * * * *`, () => jobOdds(config))
 
-    // Standings: every 6 hours
-    cron.schedule(`${offset} */6 * * *`, () => jobStandings(config))
+    // Standings: every 6 hours, spread out by league across the hour
+    cron.schedule(`${leagueMinuteOffset} */6 * * *`, () => jobStandings(config))
 
-    // Injuries: every 6 hours, staggered by 1h
-    cron.schedule(`${offset} 1,7,13,19 * * *`, () => jobInjuries(config))
+    // Injuries: every 6 hours, offset 5 minutes after standings within each league window
+    cron.schedule(`${(leagueMinuteOffset + 5) % 60} 1,7,13,19 * * *`, () => jobInjuries(config))
 
-    // Player stats: daily
-    cron.schedule(`${offset} 5 * * *`, () => jobPlayerStats(config))
+    // Player stats: daily, 15 minutes apart by league
+    cron.schedule(`${leagueMinuteOffset} 5 * * *`, () => jobPlayerStats(config))
 
-    // Rosters: daily at 6 AM
-    cron.schedule(`${offset} 6 * * *`, () => jobRosters(config))
+    // Rosters: daily at 6 AM, 15 minutes apart by league
+    cron.schedule(`${leagueMinuteOffset} 6 * * *`, () => jobRosters(config))
 
-    console.log(`  - ${config.name}: scores/odds every 10m, standings/injuries 6h, player stats daily, rosters daily`)
+    console.log(`  - ${config.name}: scores/odds every 10m, standings/injuries 6h (15m stagger), player stats daily, rosters daily`)
   })
 
   // Run initial fetch for all leagues
