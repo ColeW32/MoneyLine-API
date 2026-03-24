@@ -574,7 +574,10 @@ export function startScheduler() {
     jobStandings(config).catch((e) => console.error(`[scheduler] Initial ${leagueId} standings failed:`, e.message))
   }
 
-  const shouldRunStartupBackfill = parseBooleanEnv(process.env.PLAYER_STATS_STARTUP_BACKFILL)
+  const startupBackfillSetting = process.env.PLAYER_STATS_STARTUP_BACKFILL
+  const shouldRunStartupBackfill = startupBackfillSetting == null
+    ? true
+    : parseBooleanEnv(startupBackfillSetting)
   if (!shouldRunStartupBackfill) {
     console.log('[scheduler] Startup player stats backfill disabled (set PLAYER_STATS_STARTUP_BACKFILL=true to enable)')
     return
