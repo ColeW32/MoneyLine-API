@@ -385,15 +385,28 @@ export function startScheduler() {
     console.log(`  - ${config.name}: scores/odds every 10m, standings/injuries 6h (15m stagger), player stats every 6h, rosters daily`)
   })
 
-  // Run initial fetch for all leagues
+  // Run initial fetch for all leagues.
+  // Scores and standings fire in parallel (lightweight, no rate-limit risk).
+  // Player stats backfills run sequentially so we don't hammer GoalServe with
+  // 4 concurrent streams of hundreds of requests each.
   console.log('[scheduler] Running initial data fetch...')
   for (const leagueId of leagues) {
     const config = SPORTS[leagueId]
     jobScores(config).catch((e) => console.error(`[scheduler] Initial ${leagueId} scores failed:`, e.message))
     jobStandings(config).catch((e) => console.error(`[scheduler] Initial ${leagueId} standings failed:`, e.message))
-    jobPlayerStats(config, {
-      backfill: true,
-      seasons: getDefaultPlayerStatsBackfillSeasons(leagueId),
-    }).catch((e) => console.error(`[scheduler] Initial ${leagueId} player stats failed:`, e.message))
   }
+
+  ;(async () => {
+    for (const leagueId of leagues) {
+      const config = SPORTS[leagueId]
+      try {
+        await jobPlayerStats(config, {
+          backfill: true,
+          seasons: getDefaultPlayerStatsBackfillSeasons(leagueId),
+        })
+      } catch (e) {
+        console.error(`[scheduler] Initial ${leagueId} player stats failed:`, e.message)
+      }
+    }
+  })()
 }
