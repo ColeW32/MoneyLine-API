@@ -63,10 +63,20 @@ async function createIndexes() {
   await db.collection('standings').createIndex({ leagueId: 1, season: 1 })
   console.log('  - standings indexes created')
 
-  // source_id_map
+  // source_id_map legacy
   await db.collection('source_id_map').createIndex({ source: 1, sourceId: 1 }, { unique: true })
   await db.collection('source_id_map').createIndex({ moneylineId: 1 })
   console.log('  - source_id_map indexes created')
+
+  // source_id_map_v2
+  await db.collection('source_id_map_v2').createIndex({ source: 1, sourceId: 1, entityType: 1, sport: 1 }, { unique: true })
+  await db.collection('source_id_map_v2').createIndex({ moneylineId: 1 })
+  console.log('  - source_id_map_v2 indexes created')
+
+  // ingestion_state
+  await db.collection('ingestion_state').createIndex({ jobType: 1, leagueId: 1, season: 1 }, { unique: true })
+  await db.collection('ingestion_state').createIndex({ jobType: 1, status: 1, updatedAt: -1 })
+  console.log('  - ingestion_state indexes created')
 
   // users
   await db.collection('users').createIndex({ email: 1 }, { unique: true })

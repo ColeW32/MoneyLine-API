@@ -10,7 +10,8 @@
     "test": "node --test test/**/*.test.js",
     "seed": "node scripts/seed.js",
     "indexes": "node scripts/createIndexes.js",
-    "backfill:player-stats": "node scripts/backfillPlayerStats.js"
+    "backfill:player-stats": "node scripts/backfillPlayerStats.js",
+    "verify:player-stats": "node scripts/verifyPlayerStatsIntegrity.js"
   },
   "dependencies": {
     "@fastify/cors": "^10.0.2",

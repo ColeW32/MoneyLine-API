@@ -1,5 +1,5 @@
 import { getCollection } from '../../db.js'
-import { getMoneylineId } from '../idMapper.js'
+import { getMoneylineId, isValidSourceId } from '../idMapper.js'
 import { getCurrentSeason, getSeasonForDate } from '../../config/sports.js'
 import { lookupBookmaker, bookmakerSortComparator } from '../bookmakerCatalog.js'
 
@@ -36,6 +36,59 @@ export function toEasternDate(utcDate) {
 export function toArray(value) {
   if (value == null) return []
   return Array.isArray(value) ? value : [value]
+}
+
+function slugifyIdPart(value, fallback = 'unknown') {
+  const normalized = String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+  return normalized || fallback
+}
+
+export function buildSyntheticScoreEventId(leagueId, match, gameStartTime) {
+  const datePart = gameStartTime instanceof Date && !Number.isNaN(gameStartTime.getTime())
+    ? gameStartTime.toISOString().slice(0, 16).replace('T', '-').replace(':', '')
+    : 'unknown-date'
+
+  return `${leagueId}-ev-${slugifyIdPart(match?.hometeam?.name)}-${slugifyIdPart(match?.awayteam?.name)}-${datePart}`
+}
+
+export async function resolveEventIdFromScoreMatch({
+  source,
+  sport,
+  leagueId,
+  match,
+  homeTeamId = null,
+  awayTeamId = null,
+}) {
+  if (isValidSourceId(match?.id)) {
+    const mapped = await getMoneylineId(source, match.id, 'event', sport)
+    if (mapped) return mapped
+  }
+
+  const gameStartTime = parseDateTime(match?.datetime_utc)
+
+  if (gameStartTime && homeTeamId && awayTeamId) {
+    const existingEvent = await getCollection('events').findOne(
+      {
+        leagueId,
+        startTime: {
+          $gte: new Date(gameStartTime.getTime() - 12 * 60 * 60 * 1000),
+          $lte: new Date(gameStartTime.getTime() + 12 * 60 * 60 * 1000),
+        },
+        $or: [
+          { homeTeamId, awayTeamId },
+          { homeTeamId: awayTeamId, awayTeamId: homeTeamId },
+        ],
+      },
+      { projection: { _id: 0, eventId: 1 } }
+    )
+
+    if (existingEvent?.eventId) return existingEvent.eventId
+  }
+
+  return buildSyntheticScoreEventId(leagueId, match, gameStartTime)
 }
 
 export function parseNumericValue(value) {
@@ -375,8 +428,9 @@ async function resolveEventId({
   opponentName,
   fallbackIndex,
 }) {
-  if (sourceEventId) {
-    return getMoneylineId(source, sourceEventId, 'event', sport)
+  if (isValidSourceId(sourceEventId)) {
+    const mapped = await getMoneylineId(source, sourceEventId, 'event', sport)
+    if (mapped) return mapped
   }
 
   if (teamId && gameDate) {

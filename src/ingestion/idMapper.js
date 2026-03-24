@@ -5,22 +5,34 @@ import { getCollection } from '../db.js'
  * Creates new mappings on first encounter.
  */
 
+const ID_MAP_COLLECTION = 'source_id_map_v2'
+
+export function isValidSourceId(sourceId) {
+  if (sourceId == null) return false
+  const normalized = String(sourceId).trim().toLowerCase()
+  return normalized !== '' && normalized !== 'undefined' && normalized !== 'null' && normalized !== 'nan'
+}
+
 export async function getMoneylineId(source, sourceId, entityType, sport, fallbackName) {
-  const col = getCollection('source_id_map')
+  if (!isValidSourceId(sourceId)) return null
+
+  const col = getCollection(ID_MAP_COLLECTION)
+  const sourceIdString = String(sourceId)
+  const mappingKey = { source, sourceId: sourceIdString, entityType, sport }
 
   // Check existing mapping
-  const existing = await col.findOne({ source, sourceId: String(sourceId) })
+  const existing = await col.findOne(mappingKey)
   if (existing) return existing.moneylineId
 
   // Generate new MoneyLine ID
   const moneylineId = generateId(entityType, sport, sourceId, fallbackName)
 
   await col.updateOne(
-    { source, sourceId: String(sourceId) },
+    mappingKey,
     {
       $set: {
         source,
-        sourceId: String(sourceId),
+        sourceId: sourceIdString,
         moneylineId,
         entityType,
         sport,
@@ -53,9 +65,12 @@ function generateId(entityType, sport, sourceId, name) {
  * Batch lookup: returns a Map of sourceId → moneylineId.
  */
 export async function batchGetMoneylineIds(source, sourceIds, entityType, sport) {
-  const col = getCollection('source_id_map')
+  const col = getCollection(ID_MAP_COLLECTION)
+  const validSourceIds = sourceIds.filter(isValidSourceId).map(String)
+  if (validSourceIds.length === 0) return new Map()
+
   const existing = await col
-    .find({ source, sourceId: { $in: sourceIds.map(String) }, entityType })
+    .find({ source, sourceId: { $in: validSourceIds }, entityType, sport })
     .toArray()
 
   const map = new Map()

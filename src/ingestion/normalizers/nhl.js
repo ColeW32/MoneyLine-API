@@ -5,6 +5,7 @@ import {
   toArray,
   normalizeFlatStats,
   getGameResult,
+  resolveEventIdFromScoreMatch,
   normalizeOdds as sharedNormalizeOdds,
   normalizePlayerStats as sharedNormalizePlayerStats,
 } from './shared.js'
@@ -65,7 +66,14 @@ export async function normalizeScores(raw) {
     try {
       const homeId = await getMoneylineId(SOURCE, m.hometeam.id, 'team', SPORT, m.hometeam.name)
       const awayId = await getMoneylineId(SOURCE, m.awayteam.id, 'team', SPORT, m.awayteam.name)
-      const eventId = await getMoneylineId(SOURCE, m.id, 'event', SPORT)
+      const eventId = await resolveEventIdFromScoreMatch({
+        source: SOURCE,
+        sport: SPORT,
+        leagueId: LEAGUE,
+        match: m,
+        homeTeamId: homeId,
+        awayTeamId: awayId,
+      })
 
       const periods = []
       for (const p of ['p1', 'p2', 'p3']) {
@@ -253,7 +261,6 @@ export async function normalizePlayerStatsFromScores(raw) {
   for (const match of matches) {
     if (!match?.player_stats && !match?.goalkeeper_stats) continue
 
-    const eventId = await getMoneylineId(SOURCE, match.id, 'event', SPORT)
     const gameStartTime = parseDateTime(match.datetime_utc)
     const gameDate = toEasternDate(gameStartTime)
     const season = getSeasonForDate(LEAGUE, gameDate)
@@ -265,6 +272,21 @@ export async function normalizePlayerStatsFromScores(raw) {
       if (!teamNode?.id) continue
 
       const teamId = await getMoneylineId(SOURCE, teamNode.id, 'team', SPORT, teamNode.name)
+      const opponentTeamId = await getMoneylineId(
+        SOURCE,
+        match[opponentSide]?.id,
+        'team',
+        SPORT,
+        match[opponentSide]?.name
+      )
+      const eventId = await resolveEventIdFromScoreMatch({
+        source: SOURCE,
+        sport: SPORT,
+        leagueId: LEAGUE,
+        match,
+        homeTeamId: side === 'hometeam' ? teamId : opponentTeamId,
+        awayTeamId: side === 'hometeam' ? opponentTeamId : teamId,
+      })
       const byPlayer = new Map()
 
       for (const row of toArray(match.player_stats?.[side]?.player)) {
