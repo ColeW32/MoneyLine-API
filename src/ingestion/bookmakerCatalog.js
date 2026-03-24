@@ -34,16 +34,24 @@ const CATALOG = {
   fanatics:         { bookmakerName: 'Fanatics',               sourceRegion: 'us2',   sourceType: 'sportsbook' },
   fliff:            { bookmakerName: 'Fliff',                  sourceRegion: 'us2',   sourceType: 'sportsbook' },
   hardrock_bet:     { bookmakerName: 'Hard Rock Bet',          sourceRegion: 'us2',   sourceType: 'sportsbook' },
+  hardrockbet:      { bookmakerName: 'Hard Rock Bet',          sourceRegion: 'us2',   sourceType: 'sportsbook' },
+  hardrockbet_az:   { bookmakerName: 'Hard Rock Bet (AZ)',     sourceRegion: 'us2',   sourceType: 'sportsbook' },
   tipico_us:        { bookmakerName: 'Tipico (US)',            sourceRegion: 'us2',   sourceType: 'sportsbook' },
   betanysports:     { bookmakerName: 'BetAnySports',           sourceRegion: 'us2',   sourceType: 'sportsbook' },
   betr_us:          { bookmakerName: 'Betr (US)',              sourceRegion: 'us2',   sourceType: 'sportsbook' },
   pinnacle:         { bookmakerName: 'Pinnacle',               sourceRegion: 'us2',   sourceType: 'sportsbook' },
+  betparx:          { bookmakerName: 'betParx',                sourceRegion: 'us2',   sourceType: 'sportsbook' },
+  ballybet:         { bookmakerName: 'Bally Bet',              sourceRegion: 'us2',   sourceType: 'sportsbook' },
+  rebet:            { bookmakerName: 'Rebet',                  sourceRegion: 'us2',   sourceType: 'sportsbook' },
 
   // --- us_ex region: exchanges and prediction markets ---
   betfair_ex_us:    { bookmakerName: 'Betfair Exchange (US)',  sourceRegion: 'us_ex', sourceType: 'exchange' },
   sporttrade:       { bookmakerName: 'Sporttrade',             sourceRegion: 'us_ex', sourceType: 'exchange' },
   kalshi:           { bookmakerName: 'Kalshi',                 sourceRegion: 'us_ex', sourceType: 'exchange' },
   novig:            { bookmakerName: 'Novig',                  sourceRegion: 'us_ex', sourceType: 'exchange' },
+  polymarket:       { bookmakerName: 'Polymarket',             sourceRegion: 'us_ex', sourceType: 'exchange' },
+  prophetx:         { bookmakerName: 'ProphetX',               sourceRegion: 'us_ex', sourceType: 'exchange' },
+  betopenly:        { bookmakerName: 'BetOpenly',              sourceRegion: 'us_ex', sourceType: 'exchange' },
 }
 
 export function lookupBookmaker(key) {
