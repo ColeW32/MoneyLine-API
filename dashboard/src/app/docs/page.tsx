@@ -70,8 +70,8 @@ export default function DocsPage() {
             detail: 'Live game scores, statuses, and box score data.',
           },
           {
-            label: 'Odds from 9+ Books',
-            detail: 'Spreads, totals, and moneylines from major sportsbooks.',
+            label: 'Odds Across Books + Exchanges',
+            detail: 'Spreads, totals, and moneylines from US sportsbooks plus supported exchanges.',
           },
           {
             label: 'Edge Analysis',

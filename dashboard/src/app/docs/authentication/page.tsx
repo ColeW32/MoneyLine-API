@@ -78,7 +78,7 @@ export default function AuthenticationPage() {
             </tr>
             <tr className="border-t border-[#e8e8e8]">
               <td className="px-4 py-3 font-medium text-[#1a1a1a]">Pro</td>
-              <td className="px-4 py-3">+ Edge analysis, play-by-play, all bookmakers</td>
+              <td className="px-4 py-3">+ Edge analysis, play-by-play, all bookmakers + exchanges</td>
               <td className="px-4 py-3 text-right whitespace-nowrap">500,000 req/month</td>
             </tr>
             <tr className="border-t border-[#e8e8e8] bg-[#faf9f6]">

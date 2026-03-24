@@ -1,6 +1,47 @@
 import { getCollection } from '../db.js'
 import { success, error } from '../utils/response.js'
 
+export function filterBookmakersForOddsResponse(bookmakers = [], {
+  sourceType = 'all',
+  bookmaker,
+  market,
+} = {}) {
+  let filtered = bookmakers.map((bk) => ({
+    ...bk,
+    markets: Array.isArray(bk.markets) ? bk.markets.map((m) => ({
+      ...m,
+      outcomes: Array.isArray(m.outcomes) ? [...m.outcomes] : m.outcomes,
+    })) : bk.markets,
+  }))
+
+  if (sourceType && sourceType !== 'all') {
+    filtered = filtered.filter((bk) => bk.sourceType === sourceType)
+  }
+
+  if (bookmaker) {
+    const normalized = bookmaker.toLowerCase()
+    filtered = filtered.filter(
+      (bk) => bk.bookmakerName.toLowerCase() === normalized || bk.bookmakerId.toLowerCase() === normalized
+    )
+  }
+
+  if (market) {
+    filtered = filtered.map((bk) => ({
+      ...bk,
+      markets: Array.isArray(bk.markets)
+        ? bk.markets.filter((m) => m.marketType === market)
+        : bk.markets,
+    }))
+  }
+
+  return filtered
+}
+
+export function applyBooksPerRequestLimit(bookmakers = [], booksAllowed = Infinity) {
+  if (booksAllowed === Infinity) return bookmakers
+  return bookmakers.slice(0, booksAllowed)
+}
+
 export default async function oddsRoutes(fastify) {
   // GET /v1/events/:eventId/odds (starter+)
   fastify.get('/v1/events/:eventId/odds', async (request, reply) => {
@@ -16,16 +57,8 @@ export default async function oddsRoutes(fastify) {
       return reply.code(404).send(error(`Odds for event '${eventId}' not found.`, 404))
     }
 
-    // Apply sourceType filter before tier slicing
-    if (sourceType && sourceType !== 'all' && odds.bookmakers) {
-      odds.bookmakers = odds.bookmakers.filter((b) => b.sourceType === sourceType)
-    }
-
-    // Apply tier slicing after filtering
-    const booksAllowed = request.tierConfig.booksPerRequest
-    if (booksAllowed !== Infinity && odds.bookmakers) {
-      odds.bookmakers = odds.bookmakers.slice(0, booksAllowed)
-    }
+    odds.bookmakers = filterBookmakersForOddsResponse(odds.bookmakers, { sourceType })
+    odds.bookmakers = applyBooksPerRequestLimit(odds.bookmakers, request.tierConfig.booksPerRequest)
 
     return success(odds, { league: odds.leagueId, event: eventId })
   })
@@ -47,36 +80,12 @@ export default async function oddsRoutes(fastify) {
       .limit(pageSize)
       .toArray()
 
-    // Apply sourceType, market, and bookmaker filters BEFORE tier slicing
     for (const o of odds) {
-      if (!o.bookmakers) continue
-
-      if (sourceType && sourceType !== 'all') {
-        o.bookmakers = o.bookmakers.filter((b) => b.sourceType === sourceType)
-      }
-
-      if (bookmaker) {
-        o.bookmakers = o.bookmakers.filter(
-          (b) => b.bookmakerName.toLowerCase() === bookmaker.toLowerCase() ||
-                 b.bookmakerId.toLowerCase() === bookmaker.toLowerCase()
-        )
-      }
-
-      if (market) {
-        for (const bk of o.bookmakers) {
-          if (bk.markets) {
-            bk.markets = bk.markets.filter((m) => m.marketType === market)
-          }
-        }
-      }
+      o.bookmakers = filterBookmakersForOddsResponse(o.bookmakers, { sourceType, bookmaker, market })
     }
 
-    // Apply tier slicing after filtering
-    const booksAllowed = request.tierConfig.booksPerRequest
-    if (booksAllowed !== Infinity) {
-      for (const o of odds) {
-        if (o.bookmakers) o.bookmakers = o.bookmakers.slice(0, booksAllowed)
-      }
+    for (const o of odds) {
+      o.bookmakers = applyBooksPerRequestLimit(o.bookmakers, request.tierConfig.booksPerRequest)
     }
 
     return success(odds, { count: odds.length, page: pageNum })

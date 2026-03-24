@@ -1,0 +1,44 @@
+import 'dotenv/config'
+import { connectDB, closeDB } from '../src/db.js'
+import { SPORTS, getAllLeagueIds } from '../src/config/sports.js'
+import { jobPlayerStats, getDefaultPlayerStatsBackfillSeasons } from '../src/ingestion/scheduler.js'
+
+const args = process.argv.slice(2)
+
+function parseListArg(flag) {
+  const value = args[args.indexOf(flag) + 1]
+  if (!value) return null
+  return value
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
+
+async function main() {
+  const requestedLeagues = parseListArg('--league') || getAllLeagueIds()
+  const requestedSeasons = parseListArg('--season')
+
+  for (const leagueId of requestedLeagues) {
+    if (!SPORTS[leagueId]) {
+      throw new Error(`Unknown league "${leagueId}". Expected one of: ${getAllLeagueIds().join(', ')}`)
+    }
+  }
+
+  await connectDB()
+
+  try {
+    for (const leagueId of requestedLeagues) {
+      const config = SPORTS[leagueId]
+      const seasons = requestedSeasons || getDefaultPlayerStatsBackfillSeasons(leagueId)
+      console.log(`[backfill:player-stats] ${leagueId}: seasons ${seasons.join(', ')}`)
+      await jobPlayerStats(config, { backfill: true, seasons })
+    }
+  } finally {
+    await closeDB()
+  }
+}
+
+main().catch((err) => {
+  console.error(`[backfill:player-stats] Failed: ${err.message}`)
+  process.exit(1)
+})

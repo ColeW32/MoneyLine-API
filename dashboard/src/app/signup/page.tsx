@@ -77,8 +77,8 @@ export default function SignupPage() {
           </h1>
           <p className="text-[#4a4a4a] text-base leading-relaxed mb-8">
             Create an account to start pulling normalized odds, props, EV
-            and arbitrage signals, scores, and prediction markets from 100+
-            sportsbooks. No credit card required to get started.
+            and arbitrage signals, scores, and prediction markets from US
+            sportsbooks and exchanges. No credit card required to get started.
           </p>
           <ul className="space-y-3 text-[#4a4a4a] text-sm">
             <li className="flex items-start gap-2">

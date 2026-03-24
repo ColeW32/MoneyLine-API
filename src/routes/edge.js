@@ -12,7 +12,7 @@ import { success, error } from '../utils/response.js'
  *   'exchange'             — only exchange-only arbs + exchange value/ev
  *   'all'                  — everything (includes mixed arbs)
  */
-function filterEdgesBySourceType(edges, sourceType) {
+export function filterEdgesBySourceType(edges, sourceType) {
   if (!sourceType || sourceType === 'all') return edges
 
   return edges.filter((e) => {

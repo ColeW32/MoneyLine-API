@@ -6,8 +6,10 @@ export default function EdgeEndpointsPage() {
       <h1 className="text-3xl font-bold text-[#1a1a1a]">Edge Data</h1>
       <p className="text-[15px] text-[#4a4a4a] leading-relaxed mt-3 max-w-2xl">
         Edge endpoints provide pre-computed arbitrage, expected value, and value
-        bet signals across supported sportsbooks. These are Pro+ features and
-        require a Pro or Enterprise tier API key.
+        bet signals across supported bookmakers. They default to sportsbook-only
+        signals; exchanges and prediction-market venues are opt-in via{' '}
+        <code className="text-[13px] bg-[#f0ede6] px-1.5 py-0.5 rounded font-mono">sourceType</code>.
+        These are Pro+ features and require a Pro or Enterprise tier API key.
       </p>
 
       <h2 className="text-xl font-semibold text-[#1a1a1a] mt-10 mb-1">Browse Edge</h2>
@@ -28,6 +30,12 @@ export default function EdgeEndpointsPage() {
             type: 'string',
             required: false,
             description: 'Filter by league',
+          },
+          {
+            name: 'sourceType',
+            type: 'string',
+            required: false,
+            description: 'sportsbook, exchange, all (default sportsbook)',
           },
           {
             name: 'minProfit',
@@ -90,6 +98,12 @@ export default function EdgeEndpointsPage() {
             description: 'Filter by league',
           },
           {
+            name: 'sourceType',
+            type: 'string',
+            required: false,
+            description: 'sportsbook, exchange, all',
+          },
+          {
             name: 'minProfit',
             type: 'number',
             required: false,
@@ -110,6 +124,12 @@ export default function EdgeEndpointsPage() {
             type: 'string',
             required: false,
             description: 'Filter by league',
+          },
+          {
+            name: 'sourceType',
+            type: 'string',
+            required: false,
+            description: 'sportsbook, exchange, all',
           },
           {
             name: 'minEdge',
@@ -133,6 +153,12 @@ export default function EdgeEndpointsPage() {
             required: false,
             description: 'Filter by league',
           },
+          {
+            name: 'sourceType',
+            type: 'string',
+            required: false,
+            description: 'sportsbook, exchange, all',
+          },
         ]}
       />
 
@@ -148,6 +174,12 @@ export default function EdgeEndpointsPage() {
             type: 'string',
             required: true,
             description: 'The event identifier',
+          },
+          {
+            name: 'sourceType',
+            type: 'string',
+            required: false,
+            description: 'sportsbook, exchange, all',
           },
         ]}
       />

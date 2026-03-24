@@ -93,7 +93,7 @@ export function detectArbitrage(bookmakers) {
  * as a proxy for true probability.
  *
  * - type:'value'  — edgePct > VALUE_BET_THRESHOLD (consensus minus implied > 3%)
- * - type:'ev'     — evPct > EV_THRESHOLD but below value threshold
+ * - type:'ev'     — evPct > EV_THRESHOLD
  *
  * Only considers bookmakers with a known sourceType (excludes 'unknown').
  * Each edge carries sourceType/sourceRegion for downstream filtering.
@@ -138,7 +138,6 @@ export function detectEdges(bookmakers) {
       const evPct = ev * 100
 
       if (edgePct > VALUE_BET_THRESHOLD * 100) {
-        // Value bet — also includes EV data when available
         edges.push({
           edgeId: `value-${Date.now()}-${offer.bookmakerId}`,
           type: 'value',
@@ -168,8 +167,9 @@ export function detectEdges(bookmakers) {
             },
           }),
         })
-      } else if (evPct > EV_THRESHOLD * 100) {
-        // Positive EV but below value threshold
+      }
+
+      if (evPct > EV_THRESHOLD * 100) {
         edges.push({
           edgeId: `ev-${Date.now()}-${offer.bookmakerId}`,
           type: 'ev',

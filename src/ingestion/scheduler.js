@@ -1,6 +1,13 @@
 import cron from 'node-cron'
 import { getCollection } from '../db.js'
-import { SPORTS, getAllLeagueIds, getCurrentSeason, getSeasonStartDate } from '../config/sports.js'
+import {
+  SPORTS,
+  getAllLeagueIds,
+  getCurrentSeason,
+  getPreviousSeason,
+  getSeasonStartDate,
+  getSeasonEndDate,
+} from '../config/sports.js'
 import { fetchScores, fetchStandings, fetchRoster, fetchInjuries } from './fetchers/goalserve.js'
 import { fetchOdds } from './fetchers/oddsApi.js'
 import { getNormalizer } from './normalizers/index.js'
@@ -57,6 +64,25 @@ function getRecentStatsDates() {
   const yesterday = new Date(today)
   yesterday.setUTCDate(yesterday.getUTCDate() - 1)
   return [today, yesterday]
+}
+
+export function getDefaultPlayerStatsBackfillSeasons(leagueId) {
+  const currentSeason = getCurrentSeason(leagueId)
+  const previousSeason = getPreviousSeason(leagueId, currentSeason)
+  return [...new Set([previousSeason, currentSeason])]
+}
+
+export function buildPlayerStatsBackfillWindows(leagueId, seasons = getDefaultPlayerStatsBackfillSeasons(leagueId)) {
+  const today = startOfUtcDay(new Date())
+
+  return seasons
+    .map((season) => {
+      const startDate = startOfUtcDay(getSeasonStartDate(leagueId, season))
+      const seasonEndDate = startOfUtcDay(getSeasonEndDate(leagueId, season))
+      const endDate = seasonEndDate < today ? seasonEndDate : today
+      return { season, startDate, endDate }
+    })
+    .filter((window) => window.startDate <= window.endDate)
 }
 
 async function rebuildSeasonDocs(playerSeasonKeys) {
@@ -182,7 +208,7 @@ async function jobInjuries(config) {
   console.log(`[scheduler] Upserted ${count} ${tag} injury reports`)
 }
 
-async function jobPlayerStats(config, { backfill = false } = {}) {
+export async function jobPlayerStats(config, { backfill = false, seasons } = {}) {
   const tag = config.leagueId.toUpperCase()
   console.log(`[scheduler] Running ${tag} player stats job${backfill ? ' (backfill)' : ''}...`)
   let gameCount = 0
@@ -192,9 +218,19 @@ async function jobPlayerStats(config, { backfill = false } = {}) {
 
   const normalizer = getNormalizer(config.leagueId)
   const playerSeasonKeys = new Set()
+  const backfillWindows = backfill
+    ? buildPlayerStatsBackfillWindows(config.leagueId, seasons)
+    : []
   const dates = backfill
-    ? buildDateRange(getSeasonStartDate(config.leagueId, getCurrentSeason(config.leagueId)), new Date())
+    ? backfillWindows.flatMap(({ startDate, endDate }) => buildDateRange(startDate, endDate))
     : getRecentStatsDates()
+
+  if (backfill && backfillWindows.length > 0) {
+    const summary = backfillWindows
+      .map(({ season, startDate, endDate }) => `${season} (${formatGoalserveDate(startDate)} → ${formatGoalserveDate(endDate)})`)
+      .join(', ')
+    console.log(`[scheduler] ${tag} player stats backfill windows: ${summary}`)
+  }
 
   for (const date of dates) {
     const raw = await fetchScores(config, formatGoalserveDate(date))
@@ -355,6 +391,9 @@ export function startScheduler() {
     const config = SPORTS[leagueId]
     jobScores(config).catch((e) => console.error(`[scheduler] Initial ${leagueId} scores failed:`, e.message))
     jobStandings(config).catch((e) => console.error(`[scheduler] Initial ${leagueId} standings failed:`, e.message))
-    jobPlayerStats(config, { backfill: true }).catch((e) => console.error(`[scheduler] Initial ${leagueId} player stats failed:`, e.message))
+    jobPlayerStats(config, {
+      backfill: true,
+      seasons: getDefaultPlayerStatsBackfillSeasons(leagueId),
+    }).catch((e) => console.error(`[scheduler] Initial ${leagueId} player stats failed:`, e.message))
   }
 }

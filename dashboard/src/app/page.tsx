@@ -262,7 +262,7 @@ export default function LandingPage() {
       <section className="py-10 sm:py-16 border-b border-[#e0e0e0]">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
           {[
-            { num: '9+', label: 'Sportsbooks' },
+            { num: 'US', label: 'Books + Exchanges' },
             { num: '12', label: 'Leagues covered' },
             { num: '<50', label: 'ms latency' },
             { num: '99.9%', label: 'Uptime' },
@@ -287,7 +287,7 @@ export default function LandingPage() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-10">
             {[
-              { title: 'Normalized Odds', desc: 'Moneyline, spread, and totals from 9+ sportsbooks, normalized into a single clean format.' },
+              { title: 'Normalized Odds', desc: 'Moneyline, spread, and totals from US sportsbooks plus supported exchanges, normalized into a single clean format.' },
               { title: 'Arbitrage Detection', desc: 'Real-time arb scanning across all books. We find the edges so you don\u2019t have to.' },
               { title: 'Expected Value', desc: 'Pre-computed +EV signals using consensus probability models across the full market.' },
               { title: 'Live Scores', desc: 'Real-time scores with period breakdowns, game clocks, and play-by-play data.' },
@@ -385,7 +385,7 @@ export default function LandingPage() {
               </p>
               <p className="text-xs text-[#888] mt-1 mb-4">1.5M credits/mo</p>
               <ul className="space-y-2 flex-1">
-                {['Everything in Starter', 'Edge data (arb, EV)', 'Play-by-play', 'All bookmakers', '200 req/min', '1-year history'].map((f) => (
+                {['Everything in Starter', 'Edge data (arb, EV)', 'Play-by-play', 'All bookmakers + exchanges', '200 req/min', '1-year history'].map((f) => (
                   <li key={f} className="flex items-start gap-1.5 text-xs text-white/70">
                     <span className="text-green-400 mt-0.5">&#10003;</span> {f}
                   </li>
