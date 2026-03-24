@@ -209,6 +209,24 @@ async function jobPlayerStats(config, { backfill = false } = {}) {
     }
 
     for (const doc of result.games) {
+      await getCollection('players').updateOne(
+        { playerId: doc.playerId },
+        {
+          $set: {
+            playerId: doc.playerId,
+            teamId: doc.teamId,
+            leagueId: doc.leagueId,
+            name: doc.playerName,
+            position: doc.position || '',
+            updatedAt: new Date(),
+          },
+          $setOnInsert: {
+            status: 'active',
+          },
+        },
+        { upsert: true }
+      )
+
       await getCollection('player_stats').updateOne(
         { playerId: doc.playerId, statType: 'game', eventId: doc.eventId },
         { $set: doc },
@@ -296,13 +314,13 @@ export function startScheduler() {
     // Injuries: every 6 hours, offset 5 minutes after standings within each league window
     cron.schedule(`${(leagueMinuteOffset + 5) % 60} 1,7,13,19 * * *`, () => jobInjuries(config))
 
-    // Player stats: daily, 15 minutes apart by league
-    cron.schedule(`${leagueMinuteOffset} 5 * * *`, () => jobPlayerStats(config))
+    // Player stats: every 6 hours, 15 minutes apart by league
+    cron.schedule(`${leagueMinuteOffset} 2,8,14,20 * * *`, () => jobPlayerStats(config))
 
     // Rosters: daily at 6 AM, 15 minutes apart by league
     cron.schedule(`${leagueMinuteOffset} 6 * * *`, () => jobRosters(config))
 
-    console.log(`  - ${config.name}: scores/odds every 10m, standings/injuries 6h (15m stagger), player stats daily, rosters daily`)
+    console.log(`  - ${config.name}: scores/odds every 10m, standings/injuries 6h (15m stagger), player stats every 6h, rosters daily`)
   })
 
   // Run initial fetch for all leagues
