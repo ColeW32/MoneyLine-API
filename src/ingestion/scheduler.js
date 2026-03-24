@@ -19,16 +19,21 @@ import { buildSeasonDoc } from './normalizers/shared.js'
  */
 async function upsertMany(collectionName, docs, matchKey) {
   const col = getCollection(collectionName)
-  let count = 0
-  for (const doc of docs) {
-    await col.updateOne(
-      { [matchKey]: doc[matchKey] },
-      { $set: doc },
-      { upsert: true }
-    )
-    count++
+  if (!Array.isArray(docs) || docs.length === 0) return 0
+
+  const ops = docs.map((doc) => ({
+    updateOne: {
+      filter: { [matchKey]: doc[matchKey] },
+      update: { $set: doc },
+      upsert: true,
+    },
+  }))
+
+  if (ops.length > 0) {
+    await col.bulkWrite(ops, { ordered: false })
   }
-  return count
+
+  return ops.length
 }
 
 function sleep(ms) {
@@ -38,6 +43,7 @@ function sleep(ms) {
 const activePlayerStatsJobs = new Map()
 let startupPlayerStatsBackfillActive = false
 const PLAYER_STATS_BACKFILL_JOB = 'player_stats_backfill'
+let criticalPlayerStatsIndexesEnsured = false
 
 function parseBooleanEnv(value) {
   return String(value || '').trim().toLowerCase() === 'true'
@@ -45,6 +51,37 @@ function parseBooleanEnv(value) {
 
 function uniqueStrings(values = []) {
   return [...new Set(values.filter(Boolean).map(String))]
+}
+
+async function ensureCriticalPlayerStatsIndexes() {
+  if (criticalPlayerStatsIndexesEnsured) return
+
+  console.log('[scheduler] Ensuring critical player stats indexes...')
+
+  await getCollection('events').createIndex({ eventId: 1 }, { unique: true })
+  await getCollection('players').createIndex({ playerId: 1 }, { unique: true })
+  await getCollection('player_stats').createIndex(
+    { playerId: 1, statType: 1, eventId: 1 },
+    { unique: true, sparse: true }
+  )
+  await getCollection('player_stats').createIndex(
+    { playerId: 1, statType: 1, season: 1 },
+    { unique: true, partialFilterExpression: { statType: 'season' } }
+  )
+  await getCollection('player_stats').createIndex({ playerId: 1, statType: 1, season: 1, gameDate: -1 })
+  await getCollection('source_id_map_v2').createIndex(
+    { source: 1, sourceId: 1, entityType: 1, sport: 1 },
+    { unique: true }
+  )
+  await getCollection('source_id_map_v2').createIndex({ moneylineId: 1 })
+  await getCollection('ingestion_state').createIndex(
+    { jobType: 1, leagueId: 1, season: 1 },
+    { unique: true }
+  )
+  await getCollection('ingestion_state').createIndex({ jobType: 1, status: 1, updatedAt: -1 })
+
+  criticalPlayerStatsIndexesEnsured = true
+  console.log('[scheduler] Critical player stats indexes ready')
 }
 
 export function selectPendingBackfillSeasons(targetSeasons, completedSeasons, { force = false } = {}) {
@@ -244,6 +281,44 @@ async function rebuildSeasonDocs(playerSeasonKeys, { tag } = {}) {
   return seasonCount
 }
 
+function buildPlayerUpsertOps(gameDocs) {
+  const opsByPlayerId = new Map()
+
+  for (const doc of gameDocs) {
+    opsByPlayerId.set(doc.playerId, {
+      updateOne: {
+        filter: { playerId: doc.playerId },
+        update: {
+          $set: {
+            playerId: doc.playerId,
+            teamId: doc.teamId,
+            leagueId: doc.leagueId,
+            name: doc.playerName,
+            position: doc.position || '',
+            updatedAt: new Date(),
+          },
+          $setOnInsert: {
+            status: 'active',
+          },
+        },
+        upsert: true,
+      },
+    })
+  }
+
+  return [...opsByPlayerId.values()]
+}
+
+function buildPlayerStatUpsertOps(gameDocs) {
+  return gameDocs.map((doc) => ({
+    updateOne: {
+      filter: { playerId: doc.playerId, statType: 'game', eventId: doc.eventId },
+      update: { $set: doc },
+      upsert: true,
+    },
+  }))
+}
+
 // --- Generic job handlers ---
 
 async function jobScores(config) {
@@ -359,6 +434,8 @@ export async function jobPlayerStats(config, { backfill = false, seasons } = {})
   activePlayerStatsJobs.set(config.leagueId, { backfill, startedAt: new Date() })
   console.log(`[scheduler] Running ${tag} player stats job${backfill ? ' (backfill)' : ''}...`)
   try {
+    await ensureCriticalPlayerStatsIndexes()
+
     let gameCount = 0
     let datesWithMatches = 0
     let datesWithStats = 0
@@ -384,7 +461,12 @@ export async function jobPlayerStats(config, { backfill = false, seasons } = {})
 
     for (let index = 0; index < dates.length; index++) {
       const date = dates[index]
+      const dateStartedAt = Date.now()
       try {
+        if (backfill) {
+          console.log(`[scheduler] ${tag} backfill date ${index + 1}/${dates.length} starting: ${formatGoalserveDate(date)}`)
+        }
+
         const raw = await fetchScores(config, formatGoalserveDate(date))
         if (!raw) continue
 
@@ -413,7 +495,7 @@ export async function jobPlayerStats(config, { backfill = false, seasons } = {})
             }
           }
 
-          if (backfill && ((index + 1) % 25 === 0 || index === dates.length - 1)) {
+          if (backfill && ((index + 1) % 5 === 0 || index === dates.length - 1)) {
             console.log(`[scheduler] ${tag} backfill progress: ${index + 1}/${dates.length} dates scanned, ${datesWithMatches} with matches, ${datesWithStats} with stats, ${gameCount} game logs so far`)
           }
 
@@ -423,35 +505,28 @@ export async function jobPlayerStats(config, { backfill = false, seasons } = {})
 
         datesWithStats++
 
-        for (const doc of result.games) {
-          await getCollection('players').updateOne(
-            { playerId: doc.playerId },
-            {
-              $set: {
-                playerId: doc.playerId,
-                teamId: doc.teamId,
-                leagueId: doc.leagueId,
-                name: doc.playerName,
-                position: doc.position || '',
-                updatedAt: new Date(),
-              },
-              $setOnInsert: {
-                status: 'active',
-              },
-            },
-            { upsert: true }
-          )
+        const playerOps = buildPlayerUpsertOps(result.games)
+        const playerStatOps = buildPlayerStatUpsertOps(result.games)
 
-          await getCollection('player_stats').updateOne(
-            { playerId: doc.playerId, statType: 'game', eventId: doc.eventId },
-            { $set: doc },
-            { upsert: true }
-          )
+        if (playerOps.length > 0) {
+          await getCollection('players').bulkWrite(playerOps, { ordered: false })
+        }
+
+        if (playerStatOps.length > 0) {
+          await getCollection('player_stats').bulkWrite(playerStatOps, { ordered: false })
+        }
+
+        for (const doc of result.games) {
           gameCount++
           playerSeasonKeys.add(`${doc.playerId}::${doc.season}`)
         }
 
-        if (backfill && ((index + 1) % 25 === 0 || index === dates.length - 1)) {
+        if (backfill) {
+          const durationMs = Date.now() - dateStartedAt
+          console.log(`[scheduler] ${tag} backfill date ${index + 1}/${dates.length} complete in ${(durationMs / 1000).toFixed(1)}s: ${historicalEvents.length} events, ${result.games.length} game logs`)
+        }
+
+        if (backfill && ((index + 1) % 5 === 0 || index === dates.length - 1)) {
           console.log(`[scheduler] ${tag} backfill progress: ${index + 1}/${dates.length} dates scanned, ${datesWithMatches} with matches, ${datesWithStats} with stats, ${gameCount} game logs so far`)
         }
 
