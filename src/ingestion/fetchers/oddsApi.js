@@ -36,8 +36,9 @@ async function fetchJSON(path, params = {}) {
 }
 
 export function fetchOdds(config, markets = 'h2h,spreads,totals') {
+  const regions = process.env.ODDS_API_REGIONS || 'us,us2,us_ex'
   return fetchJSON(`/v4/sports/${config.oddsApi.sportKey}/odds`, {
-    regions: 'us',
+    regions,
     markets,
     oddsFormat: 'american',
   })

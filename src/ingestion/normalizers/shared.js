@@ -1,6 +1,7 @@
 import { getCollection } from '../../db.js'
 import { getMoneylineId } from '../idMapper.js'
 import { getCurrentSeason, getSeasonForDate } from '../../config/sports.js'
+import { lookupBookmaker, bookmakerSortComparator } from '../bookmakerCatalog.js'
 
 /**
  * Shared normalization utilities used across all sports.
@@ -80,20 +81,31 @@ export function normalizeOdds(oddsApiData, leagueId, sport) {
   if (!Array.isArray(oddsApiData)) return []
 
   return oddsApiData.map((event) => {
-    const bookmakers = (event.bookmakers || []).map((bk) => ({
-      bookmakerId: bk.key,
-      bookmakerName: bk.title,
-      lastUpdate: new Date(bk.last_update),
-      markets: (bk.markets || []).map((market) => ({
-        marketType: normalizeMarketKey(market.key),
-        outcomes: (market.outcomes || []).map((o) => ({
-          name: o.name,
-          price: o.price,
-          impliedProbability: americanToImplied(o.price),
-          ...(o.point != null && { point: o.point }),
+    const bookmakers = (event.bookmakers || []).map((bk) => {
+      const catalog = lookupBookmaker(bk.key)
+      if (!catalog) {
+        console.warn(`[normalizeOdds] Unknown bookmaker key: "${bk.key}" — storing as sourceType:unknown`)
+      }
+      return {
+        bookmakerId: bk.key,
+        bookmakerName: bk.title,
+        sourceRegion: catalog?.sourceRegion || 'unknown',
+        sourceType: catalog?.sourceType || 'unknown',
+        lastUpdate: new Date(bk.last_update),
+        markets: (bk.markets || []).map((market) => ({
+          marketType: normalizeMarketKey(market.key),
+          outcomes: (market.outcomes || []).map((o) => ({
+            name: o.name,
+            price: o.price,
+            impliedProbability: americanToImplied(o.price),
+            ...(o.point != null && { point: o.point }),
+          })),
         })),
-      })),
-    }))
+      }
+    })
+
+    // Deterministic order: sportsbooks first, then exchanges, then alphabetical within each group
+    bookmakers.sort(bookmakerSortComparator)
 
     return {
       eventId: `${leagueId}-odds-${event.id}`,
