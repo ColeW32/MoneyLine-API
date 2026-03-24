@@ -6,7 +6,10 @@ import { jobPlayerStats, getDefaultPlayerStatsBackfillSeasons } from '../src/ing
 const args = process.argv.slice(2)
 
 function parseListArg(flag) {
-  const value = args[args.indexOf(flag) + 1]
+  const index = args.indexOf(flag)
+  if (index === -1) return null
+
+  const value = args[index + 1]
   if (!value) return null
   return value
     .split(',')
