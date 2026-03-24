@@ -186,6 +186,9 @@ async function jobPlayerStats(config, { backfill = false } = {}) {
   const tag = config.leagueId.toUpperCase()
   console.log(`[scheduler] Running ${tag} player stats job${backfill ? ' (backfill)' : ''}...`)
   let gameCount = 0
+  let datesWithMatches = 0
+  let datesWithStats = 0
+  let sampledNoStats = false
 
   const normalizer = getNormalizer(config.leagueId)
   const playerSeasonKeys = new Set()
@@ -199,14 +202,33 @@ async function jobPlayerStats(config, { backfill = false } = {}) {
 
     const historicalEvents = await normalizer.normalizeScores(raw)
     if (historicalEvents.length > 0) {
+      datesWithMatches++
       await upsertMany('events', historicalEvents, 'eventId')
     }
 
     const result = await normalizer.normalizePlayerStatsFromScores?.(raw)
     if (!result?.games?.length) {
+      // Log one sample to help diagnose why stats are missing
+      if (backfill && !sampledNoStats && historicalEvents.length > 0) {
+        sampledNoStats = true
+        const matches = raw?.scores?.category?.match
+        const matchArr = matches ? (Array.isArray(matches) ? matches : [matches]) : []
+        const sampleMatch = matchArr.find(m => m?.player_stats || m?.goalkeeper_stats) || matchArr[0]
+        if (sampleMatch) {
+          const hasPlayerStats = !!sampleMatch.player_stats
+          const hasGoalkeeperStats = !!sampleMatch.goalkeeper_stats
+          const matchKeys = Object.keys(sampleMatch).filter(k => k.toLowerCase().includes('stat') || k.toLowerCase().includes('player') || k.toLowerCase().includes('goal'))
+          console.log(`[scheduler] ${tag} sample match on ${formatGoalserveDate(date)}: player_stats=${hasPlayerStats}, goalkeeper_stats=${hasGoalkeeperStats}, stat-related keys=${JSON.stringify(matchKeys)}`)
+          if (hasPlayerStats) {
+            console.log(`[scheduler] ${tag} player_stats sub-keys: ${JSON.stringify(Object.keys(sampleMatch.player_stats))}`)
+          }
+        }
+      }
       await sleep(100)
       continue
     }
+
+    datesWithStats++
 
     for (const doc of result.games) {
       await getCollection('players').updateOne(
@@ -240,7 +262,11 @@ async function jobPlayerStats(config, { backfill = false } = {}) {
   }
 
   const seasonCount = await rebuildSeasonDocs(playerSeasonKeys)
-  console.log(`[scheduler] Upserted ${gameCount} ${tag} player game logs and ${seasonCount} season docs`)
+  if (backfill) {
+    console.log(`[scheduler] ${tag} backfill: ${datesWithMatches} dates with matches, ${datesWithStats} with stats, ${gameCount} game logs, ${seasonCount} season docs`)
+  } else {
+    console.log(`[scheduler] Upserted ${gameCount} ${tag} player game logs and ${seasonCount} season docs`)
+  }
 }
 
 async function jobOdds(config) {

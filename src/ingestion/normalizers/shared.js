@@ -19,6 +19,20 @@ export function parseDateTime(dtStr) {
   return new Date(`${yyyy}-${mm}-${dd}T${hh}:${min}:00Z`)
 }
 
+/**
+ * Convert a UTC Date to the calendar date in US Eastern Time (America/New_York),
+ * returned as midnight UTC of that ET date.
+ *
+ * Needed because US sports games start in the evening ET, which falls on the next
+ * UTC calendar day (e.g. 7:30 PM ET = 00:30 AM UTC). Without this, gameDate would
+ * be off by one day for all evening games.
+ */
+export function toEasternDate(utcDate) {
+  if (!utcDate) return null
+  const etStr = utcDate.toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
+  return new Date(`${etStr}T00:00:00Z`)
+}
+
 export function toArray(value) {
   if (value == null) return []
   return Array.isArray(value) ? value : [value]
@@ -494,7 +508,8 @@ export async function normalizePlayerStats(raw, {
           season,
           statType: 'game',
           eventId,
-          gameDate,
+          gameStartTime: gameDate,
+          gameDate: toEasternDate(gameDate),
           opponent: opponentName || null,
           homeAway: readField(gameNode, HOME_AWAY_KEYS) || null,
           result: readField(gameNode, RESULT_KEYS) || null,

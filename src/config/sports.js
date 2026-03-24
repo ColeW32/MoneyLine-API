@@ -22,7 +22,7 @@ export const SPORTS = {
       'min', 'nj', 'no', 'ny', 'okc', 'orl', 'phi', 'phx',
       'por', 'sac', 'sa', 'tor', 'utah', 'wsh',
     ],
-    season: { startMonth: 9, format: 'split' }, // Oct-Jun → "2025-26"
+    season: { startMonth: 9, endMonth: 5, format: 'split' }, // Oct-Jun → "2025-26"
   },
 
   nfl: {
@@ -43,7 +43,7 @@ export const SPORTS = {
       'lv', 'lac', 'lar', 'mia', 'min', 'ne', 'no', 'nyg',
       'nyj', 'phi', 'pit', 'sf', 'sea', 'tb', 'ten', 'wsh',
     ],
-    season: { startMonth: 8, format: 'split' }, // Sep-Feb → "2025-26"
+    season: { startMonth: 8, endMonth: 1, format: 'split' }, // Sep-Feb → "2025-26"
   },
 
   mlb: {
@@ -64,7 +64,7 @@ export const SPORTS = {
       'min', 'nym', 'nyy', 'oak', 'phi', 'pit', 'sd', 'sf',
       'sea', 'stl', 'tb', 'tex', 'tor', 'wsh',
     ],
-    season: { startMonth: 2, format: 'year' }, // Mar-Oct → "2026"
+    season: { startMonth: 2, endMonth: 9, format: 'year' }, // Mar-Oct → "2026"
   },
 
   nhl: {
@@ -85,7 +85,7 @@ export const SPORTS = {
       'nsh', 'nj', 'nyi', 'nyr', 'ott', 'phi', 'pit', 'sj',
       'sea', 'stl', 'tb', 'tor', 'van', 'vgk', 'wpg', 'wsh',
     ],
-    season: { startMonth: 9, format: 'split' }, // Oct-Jun → "2025-26"
+    season: { startMonth: 9, endMonth: 5, format: 'split' }, // Oct-Jun → "2025-26"
   },
 }
 
@@ -130,4 +130,27 @@ export function getSeasonStartDate(leagueId, season = getCurrentSeason(leagueId)
 
   const [startYear] = String(season).split('-')
   return new Date(Date.UTC(Number(startYear), config.season.startMonth, 1))
+}
+
+export function getSeasonEndDate(leagueId, season = getCurrentSeason(leagueId)) {
+  const config = SPORTS[leagueId]
+
+  if (config.season.format === 'year') {
+    return new Date(Date.UTC(Number(season), config.season.endMonth + 1, 0))
+  }
+
+  const [startYear] = String(season).split('-')
+  return new Date(Date.UTC(Number(startYear) + 1, config.season.endMonth + 1, 0))
+}
+
+export function getPreviousSeason(leagueId, season = getCurrentSeason(leagueId)) {
+  const config = SPORTS[leagueId]
+
+  if (config.season.format === 'year') {
+    return String(Number(season) - 1)
+  }
+
+  const [startYear] = String(season).split('-')
+  const previousStartYear = Number(startYear) - 1
+  return `${previousStartYear}-${String(previousStartYear + 1).slice(2)}`
 }

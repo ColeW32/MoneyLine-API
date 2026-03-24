@@ -1,6 +1,7 @@
 import { getMoneylineId } from '../idMapper.js'
 import {
   parseDateTime,
+  toEasternDate,
   toArray,
   normalizeFlatStats,
   getGameResult,
@@ -259,7 +260,8 @@ export async function normalizePlayerStatsFromScores(raw) {
     if (!hitters && !pitchers) continue
 
     const eventId = await getMoneylineId(SOURCE, match.id, 'event', SPORT)
-    const gameDate = parseDateTime(match.datetime_utc)
+    const gameStartTime = parseDateTime(match.datetime_utc)
+    const gameDate = toEasternDate(gameStartTime)
     const season = getSeasonForDate(LEAGUE, gameDate)
     const sourceUpdatedAt = new Date()
 
@@ -330,6 +332,7 @@ export async function normalizePlayerStatsFromScores(raw) {
           season,
           statType: 'game',
           eventId,
+          gameStartTime,
           gameDate,
           opponent: match[opponentSide]?.name || null,
           homeAway: side === 'hometeam' ? 'home' : 'away',
