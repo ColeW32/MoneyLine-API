@@ -53,11 +53,43 @@ function uniqueStrings(values = []) {
   return [...new Set(values.filter(Boolean).map(String))]
 }
 
+function parseLeagueListEnv(value, fallback = []) {
+  const leagues = uniqueStrings(
+    String(value || '')
+      .split(',')
+      .map((part) => part.trim().toLowerCase())
+  )
+  return leagues.length > 0 ? leagues : uniqueStrings(fallback)
+}
+
 function hasUsableBackfillSummary(summary = {}) {
   return Number(summary.gameCount || 0) > 0
     || Number(summary.seasonCount || 0) > 0
     || Number(summary.datesWithStats || 0) > 0
     || Number(summary.datesWithMatches || 0) > 0
+}
+
+function indexKeyMatches(index, keySpec) {
+  const current = Object.entries(index.key || {})
+  const expected = Object.entries(keySpec || {})
+  if (current.length !== expected.length) return false
+  return expected.every(([key, value], idx) => current[idx]?.[0] === key && current[idx]?.[1] === value)
+}
+
+function partialFilterMatches(index, partialFilterExpression) {
+  const current = index.partialFilterExpression || null
+  const expected = partialFilterExpression || null
+  return JSON.stringify(current) === JSON.stringify(expected)
+}
+
+function findIndexByShape(indexes, keySpec, options = {}) {
+  const { unique, partialFilterExpression } = options
+  return indexes.find((index) => {
+    if (!indexKeyMatches(index, keySpec)) return false
+    if (typeof unique === 'boolean' && Boolean(index.unique) !== unique) return false
+    if (!partialFilterMatches(index, partialFilterExpression)) return false
+    return true
+  })
 }
 
 async function ensureCriticalPlayerStatsIndexes() {
@@ -66,35 +98,54 @@ async function ensureCriticalPlayerStatsIndexes() {
   console.log('[scheduler] Ensuring critical player stats indexes...')
 
   const playerStatsCollection = getCollection('player_stats')
-  const existingPlayerStatsIndexes = await playerStatsCollection.indexes()
+  const playerGameIndexKey = { playerId: 1, statType: 1, eventId: 1 }
+  const playerSeasonIndexKey = { playerId: 1, statType: 1, season: 1 }
+  const playerSeasonLookupIndexKey = { playerId: 1, statType: 1, season: 1, gameDate: -1 }
+  const gamePartial = { statType: 'game' }
+  const seasonPartial = { statType: 'season' }
+  let existingPlayerStatsIndexes = await playerStatsCollection.indexes()
   const legacyGameIndex = existingPlayerStatsIndexes.find(
     (index) =>
-      index.name === 'playerId_1_statType_1_eventId_1' &&
+      indexKeyMatches(index, playerGameIndexKey) &&
       !index.partialFilterExpression
   )
 
   if (legacyGameIndex) {
     console.log('[scheduler] Replacing legacy player_stats game uniqueness index...')
     await playerStatsCollection.dropIndex(legacyGameIndex.name)
+    existingPlayerStatsIndexes = await playerStatsCollection.indexes()
   }
 
   await getCollection('events').createIndex({ eventId: 1 }, { unique: true })
   await getCollection('players').createIndex({ playerId: 1 }, { unique: true })
-  await playerStatsCollection.createIndex(
-    { playerId: 1, statType: 1, eventId: 1 },
-    {
+
+  const existingGameIndex = findIndexByShape(existingPlayerStatsIndexes, playerGameIndexKey, {
+    unique: true,
+    partialFilterExpression: gamePartial,
+  })
+  if (!existingGameIndex) {
+    await playerStatsCollection.createIndex(playerGameIndexKey, {
       unique: true,
-      partialFilterExpression: { statType: 'game' },
-    }
-  )
-  await playerStatsCollection.createIndex(
-    { playerId: 1, statType: 1, season: 1 },
-    {
+      partialFilterExpression: gamePartial,
+    })
+  }
+
+  const existingSeasonIndex = findIndexByShape(existingPlayerStatsIndexes, playerSeasonIndexKey, {
+    unique: true,
+    partialFilterExpression: seasonPartial,
+  })
+  if (!existingSeasonIndex) {
+    await playerStatsCollection.createIndex(playerSeasonIndexKey, {
       unique: true,
-      partialFilterExpression: { statType: 'season' },
-    }
-  )
-  await playerStatsCollection.createIndex({ playerId: 1, statType: 1, season: 1, gameDate: -1 })
+      partialFilterExpression: seasonPartial,
+    })
+  }
+
+  const existingSeasonLookupIndex = findIndexByShape(existingPlayerStatsIndexes, playerSeasonLookupIndexKey)
+  if (!existingSeasonLookupIndex) {
+    await playerStatsCollection.createIndex(playerSeasonLookupIndexKey)
+  }
+
   await getCollection('source_id_map_v2').createIndex(
     { source: 1, sourceId: 1, entityType: 1, sport: 1 },
     { unique: true }
@@ -500,6 +551,12 @@ export async function jobPlayerStats(config, { backfill = false, seasons } = {})
     for (let index = 0; index < dates.length; index++) {
       const date = dates[index]
       const dateStartedAt = Date.now()
+      const logBackfillDateComplete = (message) => {
+        if (!backfill) return
+        const durationMs = Date.now() - dateStartedAt
+        console.log(`[scheduler] ${tag} backfill date ${index + 1}/${dates.length} complete in ${(durationMs / 1000).toFixed(1)}s: ${message}`)
+      }
+
       try {
         if (backfill) {
           console.log(`[scheduler] ${tag} backfill date ${index + 1}/${dates.length} starting: ${formatGoalserveDate(date)}`)
@@ -509,7 +566,14 @@ export async function jobPlayerStats(config, { backfill = false, seasons } = {})
           retries: 2,
           tolerateMissing: true,
         })
-        if (!raw) continue
+        if (!raw) {
+          logBackfillDateComplete('no payload')
+          if (backfill && ((index + 1) % 5 === 0 || index === dates.length - 1)) {
+            console.log(`[scheduler] ${tag} backfill progress: ${index + 1}/${dates.length} dates scanned, ${datesWithMatches} with matches, ${datesWithStats} with stats, ${gameCount} game logs so far`)
+          }
+          await sleep(100)
+          continue
+        }
 
         const historicalEvents = await normalizer.normalizeScores(raw)
         if (historicalEvents.length > 0) {
@@ -535,6 +599,8 @@ export async function jobPlayerStats(config, { backfill = false, seasons } = {})
               }
             }
           }
+
+          logBackfillDateComplete(`${historicalEvents.length} events, 0 game logs`)
 
           if (backfill && ((index + 1) % 5 === 0 || index === dates.length - 1)) {
             console.log(`[scheduler] ${tag} backfill progress: ${index + 1}/${dates.length} dates scanned, ${datesWithMatches} with matches, ${datesWithStats} with stats, ${gameCount} game logs so far`)
@@ -563,8 +629,7 @@ export async function jobPlayerStats(config, { backfill = false, seasons } = {})
         }
 
         if (backfill) {
-          const durationMs = Date.now() - dateStartedAt
-          console.log(`[scheduler] ${tag} backfill date ${index + 1}/${dates.length} complete in ${(durationMs / 1000).toFixed(1)}s: ${historicalEvents.length} events, ${result.games.length} game logs`)
+          logBackfillDateComplete(`${historicalEvents.length} events, ${result.games.length} game logs`)
         }
 
         if (backfill && ((index + 1) % 5 === 0 || index === dates.length - 1)) {
@@ -574,7 +639,8 @@ export async function jobPlayerStats(config, { backfill = false, seasons } = {})
         await sleep(100)
       } catch (err) {
         dateFailures++
-        console.error(`[scheduler] ${tag} player stats failed on ${formatGoalserveDate(date)}:`, err.message)
+        const durationMs = Date.now() - dateStartedAt
+        console.error(`[scheduler] ${tag} backfill date ${index + 1}/${dates.length} failed in ${(durationMs / 1000).toFixed(1)}s: ${formatGoalserveDate(date)}: ${err.message}`)
       }
     }
 
@@ -700,14 +766,18 @@ export function startScheduler() {
   }
 
   const forceStartupBackfill = parseBooleanEnv(process.env.PLAYER_STATS_STARTUP_BACKFILL_FORCE)
-  console.log(`[scheduler] Startup player stats backfill enabled${forceStartupBackfill ? ' (force mode)' : ''}`)
+  const startupBackfillLeagues = parseLeagueListEnv(
+    process.env.PLAYER_STATS_STARTUP_BACKFILL_LEAGUES,
+    ['mlb']
+  ).filter((leagueId) => leagues.includes(leagueId))
+  console.log(`[scheduler] Startup player stats backfill enabled for ${startupBackfillLeagues.join(', ')}${forceStartupBackfill ? ' (force mode)' : ''}`)
 
   startupPlayerStatsBackfillActive = true
 
   ;(async () => {
     try {
       let ranAnyBackfill = false
-      for (const leagueId of leagues) {
+      for (const leagueId of startupBackfillLeagues) {
         const config = SPORTS[leagueId]
         try {
           const result = await runTrackedPlayerStatsBackfill(config, {
