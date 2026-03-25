@@ -16,6 +16,7 @@ import {
 
 import { normalizeOdds } from '../src/ingestion/normalizers/shared.js'
 import { detectArbitrage, detectEdges } from '../src/ingestion/edgeCalculator.js'
+import { canonicalizeTeamNameForMatching, matchExistingEventForOddsDoc } from '../src/ingestion/scheduler.js'
 
 // ---------------------------------------------------------------------------
 // 1. bookmakerCatalog — lookup and classification
@@ -218,6 +219,34 @@ test('sourceType=all returns all edges including mixed arbs', () => {
   ]
   const filtered = filterEdgesBySourceType(edges, 'all')
   assert.equal(filtered.length, 3)
+})
+
+test('canonicalizeTeamNameForMatching normalizes city aliases consistently', () => {
+  assert.equal(canonicalizeTeamNameForMatching('LA Clippers'), 'laclippers')
+  assert.equal(canonicalizeTeamNameForMatching('Los Angeles Clippers'), 'laclippers')
+  assert.equal(canonicalizeTeamNameForMatching('New York Knicks'), 'nyknicks')
+  assert.equal(canonicalizeTeamNameForMatching('New Jersey Devils'), 'njdevils')
+})
+
+test('matchExistingEventForOddsDoc matches canonical events when team names use different city forms', () => {
+  const matched = matchExistingEventForOddsDoc(
+    {
+      _sourceHomeTeam: 'Los Angeles Clippers',
+      _sourceAwayTeam: 'Toronto Raptors',
+      _sourceCommenceTime: new Date('2026-03-26T02:30:00.000Z'),
+    },
+    [
+      {
+        eventId: 'nba-ev-311357',
+        homeTeamName: 'LA Clippers',
+        awayTeamName: 'Toronto Raptors',
+        startTime: new Date('2026-03-26T02:30:00.000Z'),
+      },
+    ]
+  )
+
+  assert.ok(matched)
+  assert.equal(matched.eventId, 'nba-ev-311357')
 })
 
 // ---------------------------------------------------------------------------

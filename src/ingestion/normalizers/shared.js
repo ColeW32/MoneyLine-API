@@ -182,6 +182,7 @@ export function normalizeOdds(oddsApiData, leagueId, sport) {
       leagueId,
       sport,
       fetchedAt: new Date(),
+      _sourceEventId: String(event.id),
       _sourceHomeTeam: event.home_team,
       _sourceAwayTeam: event.away_team,
       _sourceCommenceTime: new Date(event.commence_time),

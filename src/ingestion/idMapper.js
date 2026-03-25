@@ -7,6 +7,30 @@ import { getCollection } from '../db.js'
 
 const ID_MAP_COLLECTION = 'source_id_map_v2'
 
+export async function upsertMoneylineIdMapping(source, sourceId, entityType, sport, moneylineId) {
+  if (!isValidSourceId(sourceId) || !moneylineId) return null
+
+  const sourceIdString = String(sourceId)
+  const col = getCollection(ID_MAP_COLLECTION)
+  const mappingKey = { source, sourceId: sourceIdString, entityType, sport }
+
+  await col.updateOne(
+    mappingKey,
+    {
+      $set: {
+        source,
+        sourceId: sourceIdString,
+        moneylineId,
+        entityType,
+        sport,
+      },
+    },
+    { upsert: true }
+  )
+
+  return moneylineId
+}
+
 export function isValidSourceId(sourceId) {
   if (sourceId == null) return false
   const normalized = String(sourceId).trim().toLowerCase()

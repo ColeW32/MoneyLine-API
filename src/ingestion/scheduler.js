@@ -16,6 +16,7 @@ import { calculateEdges } from './edgeCalculator.js'
 import { buildSeasonDoc } from './normalizers/shared.js'
 import { bookmakerSortComparator } from './bookmakerCatalog.js'
 import { buildPlayerPropsDocFromOddsDoc } from '../utils/playerProps.js'
+import { batchGetMoneylineIds, upsertMoneylineIdMapping } from './idMapper.js'
 
 /**
  * Upsert an array of normalized documents into a collection.
@@ -115,6 +116,128 @@ function pickLatestDate(...values) {
     .filter((value) => value instanceof Date && !Number.isNaN(value.getTime()))
     .sort((a, b) => b.getTime() - a.getTime())
   return dates[0] || null
+}
+
+const TEAM_NAME_ALIAS_PREFIXES = [
+  { tokens: ['los', 'angeles'], alias: 'la' },
+  { tokens: ['new', 'york'], alias: 'ny' },
+  { tokens: ['new', 'jersey'], alias: 'nj' },
+  { tokens: ['new', 'orleans'], alias: 'no' },
+  { tokens: ['oklahoma', 'city'], alias: 'okc' },
+  { tokens: ['san', 'antonio'], alias: 'sa' },
+  { tokens: ['san', 'francisco'], alias: 'sf' },
+  { tokens: ['san', 'diego'], alias: 'sd' },
+  { tokens: ['kansas', 'city'], alias: 'kc' },
+  { tokens: ['las', 'vegas'], alias: 'lv' },
+  { tokens: ['tampa', 'bay'], alias: 'tb' },
+]
+
+export function canonicalizeTeamNameForMatching(teamName) {
+  const raw = String(teamName || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .trim()
+
+  if (!raw) return ''
+
+  const tokens = raw.split(/\s+/).filter(Boolean)
+  const normalized = []
+
+  for (let index = 0; index < tokens.length; index += 1) {
+    const match = TEAM_NAME_ALIAS_PREFIXES.find(({ tokens: aliasTokens }) =>
+      aliasTokens.every((token, offset) => tokens[index + offset] === token)
+    )
+
+    if (match) {
+      normalized.push(match.alias)
+      index += match.tokens.length - 1
+      continue
+    }
+
+    normalized.push(tokens[index])
+  }
+
+  return normalized.join('')
+}
+
+export function matchExistingEventForOddsDoc(oddsDoc, candidateEvents = []) {
+  if (!oddsDoc?._sourceHomeTeam || !oddsDoc?._sourceAwayTeam) return null
+
+  const targetHome = canonicalizeTeamNameForMatching(oddsDoc._sourceHomeTeam)
+  const targetAway = canonicalizeTeamNameForMatching(oddsDoc._sourceAwayTeam)
+  const targetPair = [targetHome, targetAway].sort().join('|')
+  const targetTime = oddsDoc._sourceCommenceTime instanceof Date ? oddsDoc._sourceCommenceTime.getTime() : 0
+
+  const withDistance = candidateEvents.map((event) => ({
+    ...event,
+    _canonicalHome: canonicalizeTeamNameForMatching(event.homeTeamName),
+    _canonicalAway: canonicalizeTeamNameForMatching(event.awayTeamName),
+    _startDelta: event.startTime instanceof Date ? Math.abs(event.startTime.getTime() - targetTime) : Number.MAX_SAFE_INTEGER,
+  }))
+
+  const exactOrientation = withDistance
+    .filter((event) => event._canonicalHome === targetHome && event._canonicalAway === targetAway)
+    .sort((a, b) => a._startDelta - b._startDelta)
+
+  if (exactOrientation[0]?.eventId) return exactOrientation[0]
+
+  const sameTeams = withDistance
+    .filter((event) => [event._canonicalHome, event._canonicalAway].sort().join('|') === targetPair)
+    .sort((a, b) => a._startDelta - b._startDelta)
+
+  return sameTeams[0] || null
+}
+
+async function resolveCanonicalOddsEventIds(config, oddsDocs = [], knownEventIdMap = new Map()) {
+  if (!Array.isArray(oddsDocs) || oddsDocs.length === 0) return oddsDocs
+
+  const sourceEventIds = [...new Set(
+    oddsDocs
+      .map((doc) => doc?._sourceEventId)
+      .filter(Boolean)
+      .map(String)
+  )]
+
+  const existingMappings = await batchGetMoneylineIds('oddsapi', sourceEventIds, 'event', config.sport)
+  for (const [sourceEventId, moneylineId] of existingMappings.entries()) {
+    knownEventIdMap.set(sourceEventId, moneylineId)
+  }
+
+  for (const doc of oddsDocs) {
+    const sourceEventId = doc?._sourceEventId ? String(doc._sourceEventId) : null
+    if (sourceEventId && knownEventIdMap.has(sourceEventId)) {
+      doc.eventId = knownEventIdMap.get(sourceEventId)
+      continue
+    }
+
+    if (!(doc?._sourceCommenceTime instanceof Date) || Number.isNaN(doc._sourceCommenceTime.getTime())) {
+      continue
+    }
+
+    const candidateEvents = await getCollection('events')
+      .find(
+        {
+          leagueId: config.leagueId,
+          startTime: {
+            $gte: new Date(doc._sourceCommenceTime.getTime() - 12 * 60 * 60 * 1000),
+            $lte: new Date(doc._sourceCommenceTime.getTime() + 12 * 60 * 60 * 1000),
+          },
+        },
+        { projection: { _id: 0, eventId: 1, homeTeamName: 1, awayTeamName: 1, startTime: 1 } }
+      )
+      .toArray()
+
+    const matched = matchExistingEventForOddsDoc(doc, candidateEvents)
+    if (!matched?.eventId) continue
+
+    doc.eventId = matched.eventId
+    if (sourceEventId) {
+      knownEventIdMap.set(sourceEventId, matched.eventId)
+      await upsertMoneylineIdMapping('oddsapi', sourceEventId, 'event', config.sport, matched.eventId)
+    }
+  }
+
+  return oddsDocs
 }
 
 function mergeMarkets(existingMarkets = [], incomingMarkets = []) {
@@ -939,8 +1062,14 @@ async function jobOdds(config) {
   if (!raw) return
 
   const normalizer = getNormalizer(config.leagueId)
+  const oddsEventIdMap = new Map()
+  const normalizedBaseOdds = await resolveCanonicalOddsEventIds(
+    config,
+    normalizer.normalizeOdds(raw),
+    oddsEventIdMap
+  )
   const oddsByEventId = new Map(
-    normalizer.normalizeOdds(raw).map((doc) => [doc.eventId, doc])
+    normalizedBaseOdds.map((doc) => [doc.eventId, doc])
   )
 
   const includePlayerProps = process.env.ODDS_API_INCLUDE_PLAYER_PROPS !== 'false'
@@ -966,7 +1095,11 @@ async function jobOdds(config) {
           continue
         }
 
-        const [propDoc] = normalizer.normalizeOdds([propRaw])
+        const [propDoc] = await resolveCanonicalOddsEventIds(
+          config,
+          normalizer.normalizeOdds([propRaw]),
+          oddsEventIdMap
+        )
         if (propDoc) {
           oddsByEventId.set(
             propDoc.eventId,
@@ -984,21 +1117,7 @@ async function jobOdds(config) {
   for (const o of odds) {
     const originalEventId = o.eventId
 
-    if (o._sourceHomeTeam && o._sourceAwayTeam) {
-      const existingEvent = await getCollection('events').findOne({
-        leagueId: config.leagueId,
-        homeTeamName: o._sourceHomeTeam,
-        awayTeamName: o._sourceAwayTeam,
-        startTime: {
-          $gte: new Date(o._sourceCommenceTime.getTime() - 86_400_000),
-          $lte: new Date(o._sourceCommenceTime.getTime() + 86_400_000),
-        },
-      })
-      if (existingEvent) {
-        o.eventId = existingEvent.eventId
-      }
-    }
-
+    delete o._sourceEventId
     delete o._sourceHomeTeam
     delete o._sourceAwayTeam
     delete o._sourceCommenceTime
