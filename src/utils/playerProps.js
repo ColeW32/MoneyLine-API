@@ -134,6 +134,28 @@ export function buildPlayerPropsDocFromOddsDoc(oddsDoc) {
   }
 }
 
+/**
+ * Annotate each offer with isBest: true for the highest-priced offer within
+ * each (marketType, point, selectionName) group. Mutates offers in-place.
+ * In American odds, numerically higher is always better for the bettor.
+ */
+function annotateBestOffers(players) {
+  for (const playerEntry of players) {
+    for (const marketEntry of playerEntry.markets || []) {
+      for (const line of marketEntry.lines || []) {
+        if (!line.offers?.length) continue
+        const maxPrice = line.offers.reduce(
+          (max, o) => (o.price > max ? o.price : max),
+          -Infinity
+        )
+        for (const offer of line.offers) {
+          offer.isBest = offer.price === maxPrice
+        }
+      }
+    }
+  }
+}
+
 export function filterPlayerPropsDoc(playerPropsDoc, {
   market,
   player,
@@ -173,6 +195,8 @@ export function filterPlayerPropsDoc(playerPropsDoc, {
     .filter((playerEntry) => playerEntry.markets.length > 0)
 
   if (players.length === 0) return null
+
+  annotateBestOffers(players)
 
   return {
     eventId: playerPropsDoc.eventId,

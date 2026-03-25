@@ -20,13 +20,13 @@ Keys are created in the dashboard at https://www.moneylineapp.com/dashboard/keys
 
 ## Tiers & Credits
 
-| Tier | Price | Credits/mo | Req/min | Odds | Edge | Injuries | Play-by-Play |
-|------|-------|-----------|---------|------|------|----------|-------------|
-| Free | $0 | 1,000 | 10 | — | — | — | — |
-| Starter | $29 | 150,000 | 60 | 1 venue (sportsbook, DFS, or exchange after filtering) | — | Yes | — |
-| Pro | $149 | 1,500,000 | 200 | All sportsbooks + DFS + exchanges | Yes | Yes | Yes |
-| Business | $299 | 5,000,000 | 500 | All sportsbooks + DFS + exchanges | Yes | Yes | Yes |
-| Enterprise | Custom | Unlimited | Unlimited | All sportsbooks + DFS + exchanges | Yes | Yes | Yes |
+| Tier | Price | Credits/mo | Req/min | Odds | Best Bets | Edge | Injuries | Play-by-Play |
+|------|-------|-----------|---------|------|-----------|------|----------|-------------|
+| Free | $0 | 1,000 | 10 | — | — | — | — | — |
+| Starter | $29 | 150,000 | 60 | 1 venue (sportsbook, DFS, or exchange after filtering) | — | — | Yes | — |
+| Pro | $149 | 1,500,000 | 200 | All sportsbooks + DFS + exchanges | Yes | Yes | Yes | Yes |
+| Business | $299 | 5,000,000 | 500 | All sportsbooks + DFS + exchanges | Yes | Yes | Yes | Yes |
+| Enterprise | Custom | Unlimited | Unlimited | All sportsbooks + DFS + exchanges | Yes | Yes | Yes | Yes |
 
 Odds coverage includes sportsbooks from the `us` and `us2` regions, DFS pick'em platforms from the `us_dfs` region (e.g. PrizePicks, Underdog, DraftKings Pick6, Betr Picks), plus exchanges and prediction markets from the `us_ex` region (e.g. Sporttrade, Kalshi, Betfair Exchange US). The default `sourceType=all` on odds and edge endpoints returns all venue types, and you can narrow to `sportsbook`, `dfs`, or `exchange` as needed. DFS prices are normalized into American odds for comparison, but remain indicative because DFS multipliers can vary by card composition.
 
@@ -603,6 +603,99 @@ Get edge data for a specific event.
 
 ---
 
+### Best Bets
+
+Best bets surface the most favorable available line per market outcome across all sportsbooks. In American odds, a numerically higher number is always better for the bettor (e.g. -100 is better than -110, +150 is better than +120).
+
+Best bets for game markets (moneyline, spread, totals) are available via dedicated endpoints. Player prop best bets are surfaced inline — every offer in `/v1/player-props` responses includes an `isBest` field indicating whether it is the top-priced offer for that selection at that line.
+
+#### GET /v1/best-bets
+Browse best available lines across all game markets.
+
+**Tier:** Pro+
+**Params:**
+| Param | Type | Default | Description |
+|-------|------|---------|-------------|
+| league | string | — | Filter by league ID |
+| market | string | — | Filter by market type (e.g. `h2h`, `spreads`, `totals`) |
+| bookmaker | string | — | Return the best line from a specific sportsbook only |
+| sourceType | string | `all` | `sportsbook`, `dfs`, `exchange`, or `all` |
+| limit | number | 25 | Max 50 |
+| page | number | 1 | Page number |
+
+**Notes:**
+- Without `bookmaker` or `sourceType` filters, results are served from a precomputed snapshot refreshed after each odds fetch.
+- When `bookmaker` or `sourceType` is provided, best odds are computed on-demand scoped to the filtered set.
+- When `bookmaker` is specified, `isBest` is trivially true for every outcome (it is the best within that single book).
+
+**Response:**
+```json
+{
+  "success": true,
+  "meta": { "count": 14, "page": 1 },
+  "data": [
+    {
+      "eventId": "nba-ev-311310",
+      "leagueId": "nba",
+      "sport": "basketball",
+      "calculatedAt": "2026-03-25T00:10:00.000Z",
+      "markets": [
+        {
+          "marketType": "h2h",
+          "outcomes": [
+            {
+              "name": "Boston Celtics",
+              "bestOdds": -115,
+              "bookmakerId": "draftkings",
+              "bookmakerName": "DraftKings",
+              "sourceType": "sportsbook",
+              "sourceRegion": "us"
+            },
+            {
+              "name": "Los Angeles Lakers",
+              "bestOdds": 105,
+              "bookmakerId": "fanduel",
+              "bookmakerName": "FanDuel",
+              "sourceType": "sportsbook",
+              "sourceRegion": "us"
+            }
+          ]
+        },
+        {
+          "marketType": "spreads",
+          "outcomes": [
+            {
+              "name": "Boston Celtics",
+              "point": -7.5,
+              "bestOdds": -108,
+              "bookmakerId": "betmgm",
+              "bookmakerName": "BetMGM",
+              "sourceType": "sportsbook",
+              "sourceRegion": "us"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+```
+
+---
+
+#### GET /v1/events/:eventId/best-bets
+Get best available lines for a specific event.
+
+**Tier:** Pro+
+**Params:**
+| Param | Type | Default | Description |
+|-------|------|---------|-------------|
+| market | string | — | Filter by market type |
+| bookmaker | string | — | Return best line from a specific sportsbook only |
+| sourceType | string | `all` | `sportsbook`, `dfs`, `exchange`, or `all` |
+
+---
+
 ## Quick-Start Examples
 
 ### Fetch today's NBA games
@@ -624,6 +717,27 @@ curl -H "x-api-key: ml_live_YOUR_KEY" \
 ```bash
 curl -H "x-api-key: ml_live_YOUR_KEY" \
   "https://mlapi.bet/v1/events/nba-ev-311310/odds"
+```
+
+### Get best available lines across all NFL games (Pro+)
+
+```bash
+curl -H "x-api-key: ml_live_YOUR_KEY" \
+  "https://mlapi.bet/v1/best-bets?league=nfl"
+```
+
+### Get DraftKings' best lines for an NBA game (Pro+)
+
+```bash
+curl -H "x-api-key: ml_live_YOUR_KEY" \
+  "https://mlapi.bet/v1/events/nba-ev-311310/best-bets?bookmaker=draftkings"
+```
+
+### Get best sportsbook lines only (Pro+)
+
+```bash
+curl -H "x-api-key: ml_live_YOUR_KEY" \
+  "https://mlapi.bet/v1/best-bets?league=nba&sourceType=sportsbook"
 ```
 
 ### Get arbitrage opportunities (Pro+)
@@ -719,6 +833,8 @@ curl -H "x-api-key: ml_live_YOUR_KEY" \
 | GET | /v1/player-props | Starter | Browse player props |
 | GET | /v1/events/:eventId/player-props | Starter | Event player props |
 | GET | /v1/player-props/markets | Starter | Supported player prop markets |
+| GET | /v1/best-bets | Pro | Best available line per outcome across all sportsbooks |
+| GET | /v1/events/:eventId/best-bets | Pro | Best lines for a specific event |
 | GET | /v1/edge | Pro | Browse edge data |
 | GET | /v1/edge/arbitrage | Pro | Arbitrage opportunities |
 | GET | /v1/edge/value | Pro | Value bets |

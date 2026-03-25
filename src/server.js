@@ -20,6 +20,7 @@ import playerPropsRoutes from './routes/playerProps.js'
 import eventRoutes from './routes/events.js'
 import oddsRoutes from './routes/odds.js'
 import edgeRoutes from './routes/edge.js'
+import bestBetsRoutes from './routes/bestBets.js'
 import manageRoutes from './routes/manage.js'
 import billingRoutes from './routes/billing.js'
 import { startScheduler } from './ingestion/scheduler.js'
@@ -79,6 +80,7 @@ await fastify.register(playerPropsRoutes)
 await fastify.register(eventRoutes)
 await fastify.register(oddsRoutes)
 await fastify.register(edgeRoutes)
+await fastify.register(bestBetsRoutes)
 
 // --- Health check ---
 fastify.get('/health', async () => ({ status: 'ok', timestamp: new Date().toISOString() }))

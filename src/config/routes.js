@@ -2,6 +2,8 @@
 // Any route not listed here is accessible by all tiers (including free).
 
 export const ROUTE_PERMISSIONS = {
+  '/v1/best-bets': 'pro',
+  '/v1/events/:eventId/best-bets': 'pro',
   '/v1/edge': 'pro',
   '/v1/edge/value': 'pro',
   '/v1/edge/ev': 'pro',
