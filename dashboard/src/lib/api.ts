@@ -9,6 +9,13 @@ interface ApiResponse<T = unknown> {
   error: { message: string; statusCode: number } | null
 }
 
+function resolveRequestUrl(path: string) {
+  if (path.startsWith('/manage') || path.startsWith('/auth')) {
+    return `/api${path}`
+  }
+  return `${API_URL}${path}`
+}
+
 async function request<T>(
   path: string,
   options: RequestInit = {}
@@ -16,19 +23,42 @@ async function request<T>(
   const { data: { session } } = await supabase.auth.getSession()
   const token = session?.access_token
 
-  const res = await fetch(`${API_URL}${path}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token && { Authorization: `Bearer ${token}` }),
-      ...options.headers,
-    },
-  })
-
-  const data = await res.json()
-  if (!data.success) {
-    throw new ApiError(data.error?.message || 'Request failed', data.error?.statusCode || res.status)
+  let res: Response
+  try {
+    res = await fetch(resolveRequestUrl(path), {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token && { Authorization: `Bearer ${token}` }),
+        ...options.headers,
+      },
+    })
+  } catch (err) {
+    throw new ApiError(err instanceof Error ? err.message : 'Request failed', 0)
   }
+
+  const raw = await res.text()
+
+  let data: ApiResponse<T> | null = null
+  if (raw) {
+    try {
+      data = JSON.parse(raw) as ApiResponse<T>
+    } catch {
+      if (!res.ok) {
+        throw new ApiError(raw || res.statusText || 'Request failed', res.status)
+      }
+      throw new ApiError('Invalid API response.', res.status || 500)
+    }
+  }
+
+  if (!res.ok) {
+    throw new ApiError(data?.error?.message || raw || res.statusText || 'Request failed', data?.error?.statusCode || res.status)
+  }
+
+  if (!data?.success) {
+    throw new ApiError(data?.error?.message || 'Request failed', data?.error?.statusCode || res.status)
+  }
+
   return data
 }
 

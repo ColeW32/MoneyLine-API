@@ -5,8 +5,6 @@ import { useRouter } from 'next/navigation'
 import { supabase } from './supabase'
 import type { User as SupabaseUser } from '@supabase/supabase-js'
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://mlapi.bet'
-
 export interface AppUser {
   id: string
   email: string
@@ -50,7 +48,7 @@ function toAppUser(su: SupabaseUser): AppUser {
 /** Fetch real tier/billing data from our API (MongoDB is source of truth) */
 async function fetchUserFromApi(token: string): Promise<Partial<AppUser>> {
   try {
-    const res = await fetch(`${API_URL}/auth/me`, {
+    const res = await fetch('/api/auth/me', {
       headers: { Authorization: `Bearer ${token}` },
     })
     const data = await res.json()
