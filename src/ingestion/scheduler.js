@@ -58,17 +58,38 @@ async function ensureCriticalPlayerStatsIndexes() {
 
   console.log('[scheduler] Ensuring critical player stats indexes...')
 
+  const playerStatsCollection = getCollection('player_stats')
+  const existingPlayerStatsIndexes = await playerStatsCollection.indexes()
+  const legacyGameIndex = existingPlayerStatsIndexes.find(
+    (index) =>
+      index.name === 'playerId_1_statType_1_eventId_1' &&
+      !index.partialFilterExpression
+  )
+
+  if (legacyGameIndex) {
+    console.log('[scheduler] Replacing legacy player_stats game uniqueness index...')
+    await playerStatsCollection.dropIndex(legacyGameIndex.name)
+  }
+
   await getCollection('events').createIndex({ eventId: 1 }, { unique: true })
   await getCollection('players').createIndex({ playerId: 1 }, { unique: true })
-  await getCollection('player_stats').createIndex(
+  await playerStatsCollection.createIndex(
     { playerId: 1, statType: 1, eventId: 1 },
-    { unique: true, sparse: true }
+    {
+      name: 'player_game_unique',
+      unique: true,
+      partialFilterExpression: { statType: 'game' },
+    }
   )
-  await getCollection('player_stats').createIndex(
+  await playerStatsCollection.createIndex(
     { playerId: 1, statType: 1, season: 1 },
-    { unique: true, partialFilterExpression: { statType: 'season' } }
+    {
+      name: 'player_season_unique',
+      unique: true,
+      partialFilterExpression: { statType: 'season' },
+    }
   )
-  await getCollection('player_stats').createIndex({ playerId: 1, statType: 1, season: 1, gameDate: -1 })
+  await playerStatsCollection.createIndex({ playerId: 1, statType: 1, season: 1, gameDate: -1 })
   await getCollection('source_id_map_v2').createIndex(
     { source: 1, sourceId: 1, entityType: 1, sport: 1 },
     { unique: true }
@@ -268,7 +289,17 @@ async function rebuildSeasonDocs(playerSeasonKeys, { tag } = {}) {
     const seasonDoc = buildSeasonDoc(gameDocs[0], gameDocs)
     await col.updateOne(
       { playerId, statType: 'season', season },
-      { $set: seasonDoc },
+      {
+        $set: seasonDoc,
+        $unset: {
+          eventId: '',
+          gameDate: '',
+          gameStartTime: '',
+          opponent: '',
+          homeAway: '',
+          result: '',
+        },
+      },
       { upsert: true }
     )
     seasonCount++
@@ -467,7 +498,10 @@ export async function jobPlayerStats(config, { backfill = false, seasons } = {})
           console.log(`[scheduler] ${tag} backfill date ${index + 1}/${dates.length} starting: ${formatGoalserveDate(date)}`)
         }
 
-        const raw = await fetchScores(config, formatGoalserveDate(date))
+        const raw = await fetchScores(config, formatGoalserveDate(date), {
+          retries: 2,
+          tolerateMissing: true,
+        })
         if (!raw) continue
 
         const historicalEvents = await normalizer.normalizeScores(raw)

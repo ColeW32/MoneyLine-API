@@ -41,8 +41,17 @@ async function createIndexes() {
   console.log('  - players indexes created')
 
   // player_stats
-  await db.collection('player_stats').createIndex({ playerId: 1, statType: 1, eventId: 1 }, { unique: true, sparse: true })
-  await db.collection('player_stats').createIndex({ playerId: 1, statType: 1, season: 1 }, { unique: true, partialFilterExpression: { statType: 'season' } })
+  try {
+    await db.collection('player_stats').dropIndex('playerId_1_statType_1_eventId_1')
+  } catch {}
+  await db.collection('player_stats').createIndex(
+    { playerId: 1, statType: 1, eventId: 1 },
+    { name: 'player_game_unique', unique: true, partialFilterExpression: { statType: 'game' } }
+  )
+  await db.collection('player_stats').createIndex(
+    { playerId: 1, statType: 1, season: 1 },
+    { name: 'player_season_unique', unique: true, partialFilterExpression: { statType: 'season' } }
+  )
   await db.collection('player_stats').createIndex({ playerId: 1, statType: 1, season: 1, gameDate: -1 })
   await db.collection('player_stats').createIndex({ teamId: 1, season: 1 })
   console.log('  - player_stats indexes created')

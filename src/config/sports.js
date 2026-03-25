@@ -54,6 +54,7 @@ export const SPORTS = {
     goalserve: {
       sportCode: 'baseball',
       leaguePrefix: 'mlb',
+      scoreEndpoint: 'usa',
     },
     oddsApi: {
       sportKey: 'baseball_mlb',
