@@ -46,11 +46,11 @@ async function createIndexes() {
   } catch {}
   await db.collection('player_stats').createIndex(
     { playerId: 1, statType: 1, eventId: 1 },
-    { name: 'player_game_unique', unique: true, partialFilterExpression: { statType: 'game' } }
+    { unique: true, partialFilterExpression: { statType: 'game' } }
   )
   await db.collection('player_stats').createIndex(
     { playerId: 1, statType: 1, season: 1 },
-    { name: 'player_season_unique', unique: true, partialFilterExpression: { statType: 'season' } }
+    { unique: true, partialFilterExpression: { statType: 'season' } }
   )
   await db.collection('player_stats').createIndex({ playerId: 1, statType: 1, season: 1, gameDate: -1 })
   await db.collection('player_stats').createIndex({ teamId: 1, season: 1 })

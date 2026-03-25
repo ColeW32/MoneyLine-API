@@ -53,6 +53,13 @@ function uniqueStrings(values = []) {
   return [...new Set(values.filter(Boolean).map(String))]
 }
 
+function hasUsableBackfillSummary(summary = {}) {
+  return Number(summary.gameCount || 0) > 0
+    || Number(summary.seasonCount || 0) > 0
+    || Number(summary.datesWithStats || 0) > 0
+    || Number(summary.datesWithMatches || 0) > 0
+}
+
 async function ensureCriticalPlayerStatsIndexes() {
   if (criticalPlayerStatsIndexesEnsured) return
 
@@ -76,7 +83,6 @@ async function ensureCriticalPlayerStatsIndexes() {
   await playerStatsCollection.createIndex(
     { playerId: 1, statType: 1, eventId: 1 },
     {
-      name: 'player_game_unique',
       unique: true,
       partialFilterExpression: { statType: 'game' },
     }
@@ -84,7 +90,6 @@ async function ensureCriticalPlayerStatsIndexes() {
   await playerStatsCollection.createIndex(
     { playerId: 1, statType: 1, season: 1 },
     {
-      name: 'player_season_unique',
       unique: true,
       partialFilterExpression: { statType: 'season' },
     }
@@ -125,11 +130,13 @@ async function getCompletedPlayerStatsBackfillSeasons(leagueId, seasons) {
         season: { $in: requested },
         status: 'completed',
       },
-      { projection: { _id: 0, season: 1 } }
+      { projection: { _id: 0, season: 1, summary: 1 } }
     )
     .toArray()
 
-  return docs.map((doc) => doc.season)
+  return docs
+    .filter((doc) => hasUsableBackfillSummary(doc.summary))
+    .map((doc) => doc.season)
 }
 
 async function setPlayerStatsBackfillState(leagueId, seasons, status, payload = {}) {
