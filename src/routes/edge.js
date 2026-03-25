@@ -4,11 +4,12 @@ import { success, error } from '../utils/response.js'
 /**
  * Filter edges by sourceType.
  *
- * - arbitrage edges carry `venueType`: 'sportsbook' | 'exchange' | 'mixed'
- * - value / ev edges carry `sourceType`: 'sportsbook' | 'exchange'
+ * - arbitrage edges carry `venueType`: 'sportsbook' | 'dfs' | 'exchange' | 'mixed'
+ * - value / ev edges carry `sourceType`: 'sportsbook' | 'dfs' | 'exchange'
  *
  * sourceType param:
- *   'sportsbook' (default) — only sportsbook-only arbs + sportsbook value/ev
+ *   'sportsbook'           — only sportsbook-only arbs + sportsbook value/ev
+ *   'dfs'                  — only DFS-only arbs + DFS value/ev
  *   'exchange'             — only exchange-only arbs + exchange value/ev
  *   'all'                  — everything (includes mixed arbs)
  */
@@ -27,7 +28,7 @@ export function filterEdgesBySourceType(edges, sourceType) {
 export default async function edgeRoutes(fastify) {
   // GET /v1/edge — all current edges (pro+)
   fastify.get('/v1/edge', async (request, reply) => {
-    const { type, league, minProfit, minEdge, sourceType = 'sportsbook', limit, page } = request.query
+    const { type, league, minProfit, minEdge, sourceType = 'all', limit, page } = request.query
 
     const filter = {}
     if (league) filter.leagueId = league
@@ -76,7 +77,7 @@ export default async function edgeRoutes(fastify) {
 
   // GET /v1/edge/value — value bets only (pro+)
   fastify.get('/v1/edge/value', async (request, reply) => {
-    const { league, minEdge, sourceType = 'sportsbook' } = request.query
+    const { league, minEdge, sourceType = 'all' } = request.query
     const filter = { 'edges.type': 'value' }
     if (league) filter.leagueId = league
 
@@ -105,7 +106,7 @@ export default async function edgeRoutes(fastify) {
 
   // GET /v1/edge/ev — positive EV bets only (pro+)
   fastify.get('/v1/edge/ev', async (request, reply) => {
-    const { league, sourceType = 'sportsbook' } = request.query
+    const { league, sourceType = 'all' } = request.query
     const filter = { 'edges.type': 'ev' }
     if (league) filter.leagueId = league
 
@@ -133,7 +134,7 @@ export default async function edgeRoutes(fastify) {
 
   // GET /v1/edge/arbitrage — arbitrage opportunities only (pro+)
   fastify.get('/v1/edge/arbitrage', async (request, reply) => {
-    const { league, minProfit, sourceType = 'sportsbook' } = request.query
+    const { league, minProfit, sourceType = 'all' } = request.query
     const filter = { 'edges.type': 'arbitrage' }
     if (league) filter.leagueId = league
 
@@ -163,7 +164,7 @@ export default async function edgeRoutes(fastify) {
   // GET /v1/events/:eventId/edge — edges for specific event (pro+)
   fastify.get('/v1/events/:eventId/edge', async (request, reply) => {
     const { eventId } = request.params
-    const { sourceType = 'sportsbook' } = request.query
+    const { sourceType = 'all' } = request.query
 
     const doc = await getCollection('edge_data').findOne(
       { eventId },

@@ -3,7 +3,7 @@
  *
  * Prints a clear report of the most recent ingested odds to verify:
  *   1. Bookmakers are classified with sourceRegion and sourceType
- *   2. Sportsbooks sort before exchanges within each event
+ *   2. Sportsbooks sort before DFS before exchanges within each event
  *   3. us2 books appear alongside us books
  *   4. us_ex exchanges are present
  *   5. Unknown bookmaker keys are flagged
@@ -50,7 +50,7 @@ async function run() {
   }
 
   // ── Summary: bookmaker counts by type across all events ──────────────────
-  const totals = { sportsbook: new Set(), exchange: new Set(), unknown: new Set() }
+  const totals = { sportsbook: new Set(), dfs: new Set(), exchange: new Set(), unknown: new Set() }
   for (const ev of events) {
     for (const bk of ev.bookmakers || []) {
       const bucket = totals[bk.sourceType] || totals.unknown
@@ -65,6 +65,7 @@ async function run() {
   console.log()
   console.log(col('  Unique bookmakers seen across sampled events:', BOLD))
   console.log(`    ${col('Sportsbooks', GREEN)}  (us + us2):  ${col([...totals.sportsbook].join(', ') || 'none', GREEN)}`)
+  console.log(`    ${col('DFS', MAGENTA)}          (us_dfs):   ${col([...totals.dfs].join(', ') || 'none', MAGENTA)}`)
   console.log(`    ${col('Exchanges', CYAN)}    (us_ex):     ${col([...totals.exchange].join(', ') || 'none', CYAN)}`)
   if (totals.unknown.size > 0) {
     console.log(`    ${col('⚠ Unknown', RED)}              ${col([...totals.unknown].join(', '), RED)}`)
@@ -83,14 +84,17 @@ async function run() {
       continue
     }
 
-    // Check ordering: all sportsbooks should come before exchanges
-    const firstExchangeIdx = bks.findIndex((b) => b.sourceType === 'exchange')
-    const lastSportsbookIdx = [...bks].reverse().findIndex((b) => b.sourceType === 'sportsbook')
-    const lastSportsbookIdxFwd = lastSportsbookIdx === -1 ? -1 : bks.length - 1 - lastSportsbookIdx
-    const orderOk = firstExchangeIdx === -1 || lastSportsbookIdxFwd === -1 || lastSportsbookIdxFwd < firstExchangeIdx
+    // Check ordering: sportsbooks -> dfs -> exchanges -> unknown
+    const typeOrder = { sportsbook: 0, dfs: 1, exchange: 2, unknown: 3 }
+    const orderOk = bks.every((bk, index) => {
+      if (index === 0) return true
+      const prev = typeOrder[bks[index - 1].sourceType] ?? 3
+      const current = typeOrder[bk.sourceType] ?? 3
+      return prev <= current
+    })
     const orderLabel = orderOk
-      ? col('✓ correct (sportsbooks before exchanges)', GREEN)
-      : col('✗ WRONG ORDER — sportsbook appears after exchange!', RED)
+      ? col('✓ correct (sportsbooks -> dfs -> exchanges)', GREEN)
+      : col('✗ WRONG ORDER — venue types are not grouped correctly!', RED)
 
     console.log(`  │  Sort order: ${orderLabel}`)
     console.log(`  │`)
@@ -105,10 +109,12 @@ async function run() {
         : col('(no moneyline)', DIM)
 
       const typeColor = bk.sourceType === 'sportsbook' ? GREEN
+                      : bk.sourceType === 'dfs'        ? MAGENTA
                       : bk.sourceType === 'exchange'   ? CYAN
                       : RED
       const regionColor = bk.sourceRegion === 'us'    ? GREEN
                         : bk.sourceRegion === 'us2'   ? YELLOW
+                        : bk.sourceRegion === 'us_dfs' ? MAGENTA
                         : bk.sourceRegion === 'us_ex' ? CYAN
                         : RED
 

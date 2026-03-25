@@ -39,6 +39,12 @@ test('us_ex bookmaker key returns sourceRegion=us_ex and sourceType=exchange', (
   assert.equal(entry.sourceType, 'exchange')
 })
 
+test('us_dfs bookmaker key returns sourceRegion=us_dfs and sourceType=dfs', () => {
+  const entry = lookupBookmaker('prizepicks')
+  assert.equal(entry.sourceRegion, 'us_dfs')
+  assert.equal(entry.sourceType, 'dfs')
+})
+
 test('unknown bookmaker key returns null from lookupBookmaker', () => {
   assert.equal(lookupBookmaker('totally_made_up_book'), null)
 })
@@ -106,6 +112,15 @@ test('normalizeOdds annotates us_ex bookmakers as exchange', () => {
   assert.equal(bk.sourceType, 'exchange')
 })
 
+test('normalizeOdds annotates us_dfs bookmakers as dfs', () => {
+  const raw = [makeOddsApiEvent(['prizepicks', 'underdog'])]
+  const result = normalizeOdds(raw, 'nba', 'basketball')
+  const bk = result[0].bookmakers.find((b) => b.bookmakerId === 'prizepicks')
+  assert.ok(bk)
+  assert.equal(bk.sourceRegion, 'us_dfs')
+  assert.equal(bk.sourceType, 'dfs')
+})
+
 test('normalizeOdds marks unknown bookmaker keys as sourceType:unknown', () => {
   const raw = [makeOddsApiEvent(['totally_made_up_book'])]
   const result = normalizeOdds(raw, 'nba', 'basketball')
@@ -114,16 +129,13 @@ test('normalizeOdds marks unknown bookmaker keys as sourceType:unknown', () => {
   assert.equal(bk.sourceRegion, 'unknown')
 })
 
-test('normalizeOdds sorts sportsbooks before exchanges', () => {
-  const raw = [makeOddsApiEvent(['sporttrade', 'draftkings', 'kalshi', 'fanduel'])]
+test('normalizeOdds sorts sportsbooks before dfs before exchanges', () => {
+  const raw = [makeOddsApiEvent(['sporttrade', 'draftkings', 'prizepicks', 'kalshi', 'fanduel'])]
   const result = normalizeOdds(raw, 'nba', 'basketball')
-  const types = result[0].bookmakers.map((b) => b.sourceType)
-  // All sportsbooks should come before any exchange
-  const firstExchangeIdx = types.indexOf('exchange')
-  const lastSportsbookIdx = types.lastIndexOf('sportsbook')
-  if (firstExchangeIdx !== -1 && lastSportsbookIdx !== -1) {
-    assert.ok(lastSportsbookIdx < firstExchangeIdx, 'sportsbooks should come before exchanges')
-  }
+  assert.deepEqual(
+    result[0].bookmakers.map((b) => b.sourceType),
+    ['sportsbook', 'sportsbook', 'dfs', 'exchange', 'exchange']
+  )
 })
 
 test('normalizeOdds Starter-tier slice returns a sportsbook first when exchanges are present', () => {
@@ -138,10 +150,12 @@ test('normalizeOdds Starter-tier slice returns a sportsbook first when exchanges
 // 3. bookmakerSortComparator
 // ---------------------------------------------------------------------------
 
-test('bookmakerSortComparator puts sportsbook before exchange', () => {
+test('bookmakerSortComparator puts sportsbook before dfs before exchange', () => {
   const exchange = { sourceType: 'exchange', bookmakerName: 'Aaaa Exchange' }
+  const dfs = { sourceType: 'dfs', bookmakerName: 'Middling DFS' }
   const sportsbook = { sourceType: 'sportsbook', bookmakerName: 'Zzzz Book' }
-  assert.ok(bookmakerSortComparator(sportsbook, exchange) < 0, 'sportsbook should sort before exchange')
+  assert.ok(bookmakerSortComparator(sportsbook, dfs) < 0, 'sportsbook should sort before dfs')
+  assert.ok(bookmakerSortComparator(dfs, exchange) < 0, 'dfs should sort before exchange')
   assert.ok(bookmakerSortComparator(exchange, sportsbook) > 0, 'exchange should sort after sportsbook')
 })
 
@@ -166,11 +180,23 @@ function filterEdgesBySourceType(edges, sourceType) {
 test('sourceType=exchange filter keeps only exchange value edges', () => {
   const edges = [
     { type: 'value', sourceType: 'sportsbook' },
+    { type: 'value', sourceType: 'dfs' },
     { type: 'value', sourceType: 'exchange' },
   ]
   const filtered = filterEdgesBySourceType(edges, 'exchange')
   assert.equal(filtered.length, 1)
   assert.equal(filtered[0].sourceType, 'exchange')
+})
+
+test('sourceType=dfs filter keeps only dfs value edges', () => {
+  const edges = [
+    { type: 'value', sourceType: 'sportsbook' },
+    { type: 'value', sourceType: 'dfs' },
+    { type: 'value', sourceType: 'exchange' },
+  ]
+  const filtered = filterEdgesBySourceType(edges, 'dfs')
+  assert.equal(filtered.length, 1)
+  assert.equal(filtered[0].sourceType, 'dfs')
 })
 
 test('sourceType=sportsbook (default) excludes exchange and mixed arbs', () => {

@@ -9,10 +9,11 @@ import {
   getSeasonEndDate,
 } from '../config/sports.js'
 import { fetchScores, fetchStandings, fetchRoster, fetchInjuries } from './fetchers/goalserve.js'
-import { fetchOdds } from './fetchers/oddsApi.js'
+import { fetchOdds, fetchEventOdds } from './fetchers/oddsApi.js'
 import { getNormalizer } from './normalizers/index.js'
 import { calculateEdges } from './edgeCalculator.js'
 import { buildSeasonDoc } from './normalizers/shared.js'
+import { bookmakerSortComparator } from './bookmakerCatalog.js'
 
 /**
  * Upsert an array of normalized documents into a collection.
@@ -61,6 +62,134 @@ function parseLeagueListEnv(value, fallback = []) {
       .map((part) => part.trim().toLowerCase())
   )
   return leagues.length > 0 ? leagues : uniqueStrings(fallback)
+}
+
+function parseStringListEnv(value, fallback = []) {
+  const items = uniqueStrings(
+    String(value || '')
+      .split(',')
+      .map((part) => part.trim())
+      .filter(Boolean)
+  )
+  return items.length > 0 ? items : uniqueStrings(fallback)
+}
+
+function parsePositiveIntegerEnv(value, fallback) {
+  const parsed = Number.parseInt(value, 10)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
+}
+
+function chunkArray(items, size) {
+  if (!Array.isArray(items) || items.length === 0) return []
+  const chunkSize = Math.max(1, size)
+  const chunks = []
+  for (let i = 0; i < items.length; i += chunkSize) {
+    chunks.push(items.slice(i, i + chunkSize))
+  }
+  return chunks
+}
+
+async function forEachWithConcurrency(items, concurrency, iteratee) {
+  if (!Array.isArray(items) || items.length === 0) return
+
+  let cursor = 0
+  const workerCount = Math.max(1, Math.min(concurrency, items.length))
+
+  await Promise.all(Array.from({ length: workerCount }, async () => {
+    while (cursor < items.length) {
+      const index = cursor
+      cursor += 1
+      await iteratee(items[index], index)
+    }
+  }))
+}
+
+function pickLatestDate(...values) {
+  const dates = values
+    .filter((value) => value instanceof Date && !Number.isNaN(value.getTime()))
+    .sort((a, b) => b.getTime() - a.getTime())
+  return dates[0] || null
+}
+
+function mergeMarkets(existingMarkets = [], incomingMarkets = []) {
+  const merged = new Map()
+
+  for (const market of existingMarkets) {
+    if (!market?.marketType) continue
+    merged.set(market.marketType, {
+      ...market,
+      outcomes: Array.isArray(market.outcomes) ? [...market.outcomes] : [],
+    })
+  }
+
+  for (const market of incomingMarkets) {
+    if (!market?.marketType) continue
+    merged.set(market.marketType, {
+      ...market,
+      outcomes: Array.isArray(market.outcomes) ? [...market.outcomes] : [],
+    })
+  }
+
+  return [...merged.values()].sort((a, b) => (a.marketType || '').localeCompare(b.marketType || ''))
+}
+
+function mergeBookmakers(existingBookmakers = [], incomingBookmakers = []) {
+  const merged = new Map()
+
+  for (const bookmaker of existingBookmakers) {
+    if (!bookmaker?.bookmakerId) continue
+    merged.set(bookmaker.bookmakerId, {
+      ...bookmaker,
+      markets: mergeMarkets(bookmaker.markets, []),
+    })
+  }
+
+  for (const bookmaker of incomingBookmakers) {
+    if (!bookmaker?.bookmakerId) continue
+
+    if (!merged.has(bookmaker.bookmakerId)) {
+      merged.set(bookmaker.bookmakerId, {
+        ...bookmaker,
+        markets: mergeMarkets(bookmaker.markets, []),
+      })
+      continue
+    }
+
+    const existing = merged.get(bookmaker.bookmakerId)
+    merged.set(bookmaker.bookmakerId, {
+      ...existing,
+      ...bookmaker,
+      lastUpdate: pickLatestDate(existing.lastUpdate, bookmaker.lastUpdate) || bookmaker.lastUpdate || existing.lastUpdate,
+      markets: mergeMarkets(existing.markets, bookmaker.markets),
+    })
+  }
+
+  return [...merged.values()].sort(bookmakerSortComparator)
+}
+
+function mergeOddsDocs(existingDoc, incomingDoc) {
+  if (!existingDoc) return incomingDoc
+  if (!incomingDoc) return existingDoc
+
+  return {
+    ...existingDoc,
+    ...incomingDoc,
+    fetchedAt: pickLatestDate(existingDoc.fetchedAt, incomingDoc.fetchedAt) || incomingDoc.fetchedAt || existingDoc.fetchedAt,
+    _sourceHomeTeam: existingDoc._sourceHomeTeam || incomingDoc._sourceHomeTeam,
+    _sourceAwayTeam: existingDoc._sourceAwayTeam || incomingDoc._sourceAwayTeam,
+    _sourceCommenceTime: pickLatestDate(existingDoc._sourceCommenceTime, incomingDoc._sourceCommenceTime)
+      || existingDoc._sourceCommenceTime
+      || incomingDoc._sourceCommenceTime,
+    bookmakers: mergeBookmakers(existingDoc.bookmakers, incomingDoc.bookmakers),
+  }
+}
+
+function getConfiguredPlayerPropMarkets(config) {
+  const envKey = `ODDS_API_PLAYER_PROP_MARKETS_${config.leagueId.toUpperCase()}`
+  return parseStringListEnv(
+    process.env[envKey] || process.env.ODDS_API_PLAYER_PROP_MARKETS,
+    config.oddsApi?.playerPropMarkets || []
+  )
 }
 
 function hasUsableBackfillSummary(summary = {}) {
@@ -784,7 +913,47 @@ async function jobOdds(config) {
   if (!raw) return
 
   const normalizer = getNormalizer(config.leagueId)
-  const odds = normalizer.normalizeOdds(raw)
+  const oddsByEventId = new Map(
+    normalizer.normalizeOdds(raw).map((doc) => [doc.eventId, doc])
+  )
+
+  const includePlayerProps = process.env.ODDS_API_INCLUDE_PLAYER_PROPS !== 'false'
+    && parseBooleanEnv(process.env.ODDS_API_INCLUDE_PLAYER_PROPS || 'true')
+  const playerPropMarkets = includePlayerProps ? getConfiguredPlayerPropMarkets(config) : []
+
+  if (playerPropMarkets.length > 0 && Array.isArray(raw) && raw.length > 0) {
+    const marketChunkSize = parsePositiveIntegerEnv(process.env.ODDS_API_EVENT_MARKETS_PER_REQUEST, 8)
+    const requestDelayMs = parsePositiveIntegerEnv(process.env.ODDS_API_EVENT_ODDS_DELAY_MS, 150)
+    const concurrency = parsePositiveIntegerEnv(process.env.ODDS_API_EVENT_ODDS_CONCURRENCY, 2)
+    const marketChunks = chunkArray(playerPropMarkets, marketChunkSize)
+
+    console.log(
+      `[scheduler] ${tag} fetching player props for ${raw.length} events `
+      + `(${playerPropMarkets.length} markets across ${marketChunks.length} request chunk(s))`
+    )
+
+    await forEachWithConcurrency(raw, concurrency, async (event) => {
+      for (const marketChunk of marketChunks) {
+        const propRaw = await fetchEventOdds(config, event.id, marketChunk)
+        if (!propRaw?.bookmakers?.length) {
+          if (requestDelayMs > 0) await sleep(requestDelayMs)
+          continue
+        }
+
+        const [propDoc] = normalizer.normalizeOdds([propRaw])
+        if (propDoc) {
+          oddsByEventId.set(
+            propDoc.eventId,
+            mergeOddsDocs(oddsByEventId.get(propDoc.eventId), propDoc)
+          )
+        }
+
+        if (requestDelayMs > 0) await sleep(requestDelayMs)
+      }
+    })
+  }
+
+  const odds = [...oddsByEventId.values()]
 
   for (const o of odds) {
     if (o._sourceHomeTeam && o._sourceAwayTeam) {

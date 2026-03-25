@@ -6,85 +6,97 @@ import { useState } from 'react'
 const ENDPOINTS = [
   {
     method: 'GET',
-    path: '/v1/arbitrage',
+    path: '/v1/edge/arbitrage',
     label: 'Live arb opportunities',
-    example: `GET  /v1/arbitrage?sport=nba
+    example: `GET  /v1/edge/arbitrage?league=nba&sourceType=all
 
 // Response
 {
-  "meta": { "arbs_returned": 3, "live_arbs": 1,
-    "pregame_arbs": 2, "generated_at": "2026-03-09T19:45:32Z",
-    "latency_ms": 28, "stale_warning": false },
-  "arbs": [
+  "success": true,
+  "data": [
     {
-      "arb_id": "arb_nba_lal_bos_ml_dk_fd_20260309_194532",
-      "arb_type": "two_way",
-      "game": { "game_id": "nba_lal_bos_20260309", "sport": "nba",
-        "home_team": "Boston Celtics", "away_team": "Los Angeles Lakers",
-        "start_time": "2026-03-09T23:30:00Z", "status": "pregame" },
+      "eventId": "nba-ev-311286",
+      "leagueId": "nba",
+      "sport": "basketball",
+      "type": "arbitrage",
+      "venueType": "mixed",
       "market": "moneyline",
-      "legs": [
-        { "book": "DraftKings", "side": "Boston Celtics",
-          "odds": -175, "implied_prob": 0.636 },
-        { "book": "FanDuel", "side": "Los Angeles Lakers",
-          "odds": +185, "implied_prob": 0.351 }
-      ],
-      "combined_implied": 0.987,
-      "edge_pct": 1.32,
-      "recommended_stakes": { "leg_1": 64.4, "leg_2": 35.6 }
-    }
-  ]
-}`,
-  },
-  {
-    method: 'GET',
-    path: '/v1/ev/{sport}',
-    label: 'Pre-computed EV by market',
-    example: `GET  /v1/ev/nba?min_ev=3
-
-// Response
-{
-  "meta": { "bets_returned": 5, "sport": "nba",
-    "generated_at": "2026-03-09T19:45:32Z" },
-  "ev_bets": [
-    {
-      "game": "Boston Celtics vs Los Angeles Lakers",
-      "market": "moneyline",
-      "book": "Bovada",
-      "side": "Los Angeles Lakers",
-      "odds": +195,
-      "model_prob": 0.388,
-      "implied_prob": 0.339,
-      "ev_pct": 4.63,
-      "kelly": 0.078
-    }
-  ]
-}`,
-  },
-  {
-    method: 'GET',
-    path: '/v1/odds/{sport}',
-    label: 'Live odds across all books',
-    example: `GET  /v1/odds/nba?market=moneyline
-
-// Response
-{
-  "meta": { "events": 8, "books": 9,
-    "generated_at": "2026-03-09T19:45:32Z" },
-  "odds": [
-    {
-      "game_id": "nba_bos_lal_20260309",
-      "home": "Boston Celtics",
-      "away": "Los Angeles Lakers",
-      "start_time": "2026-03-09T23:30:00Z",
-      "books": {
-        "DraftKings": { "home": -180, "away": +155 },
-        "FanDuel":    { "home": -175, "away": +150 },
-        "BetMGM":     { "home": -185, "away": +160 },
-        "Bovada":     { "home": -170, "away": +145 }
+      "outcome": "Boston Celtics vs Los Angeles Lakers",
+      "arbitrage": {
+        "books": [
+          { "bookmaker": "DraftKings", "sourceType": "sportsbook", "outcome": "Boston Celtics", "odds": -175, "stake": 514.71 },
+          { "bookmaker": "Kalshi", "sourceType": "exchange", "outcome": "Los Angeles Lakers", "odds": 185, "stake": 485.29 }
+        ],
+        "profitPct": 1.32,
+        "guaranteedProfit": 13.2,
+        "totalStake": 1000
       }
     }
-  ]
+  ],
+  "meta": { "count": 1 }
+}`,
+  },
+  {
+    method: 'GET',
+    path: '/v1/edge/ev',
+    label: 'Pre-computed EV by market',
+    example: `GET  /v1/edge/ev?league=nba&sourceType=all
+
+// Response
+{
+  "success": true,
+  "data": [
+    {
+      "eventId": "nba-ev-311286",
+      "leagueId": "nba",
+      "type": "ev",
+      "sourceType": "dfs",
+      "market": "player_points",
+      "outcome": "Jayson Tatum Over 29.5",
+      "evBet": {
+        "bookmaker": "PrizePicks",
+        "odds": 125,
+        "ev": 0.0463,
+        "evPct": 4.63
+      }
+    }
+  ],
+  "meta": { "count": 1 }
+}`,
+  },
+  {
+    method: 'GET',
+    path: '/v1/odds',
+    label: 'Live odds across all books',
+    example: `GET  /v1/odds?league=nba&market=player_points&sourceType=all
+
+// Response
+{
+  "success": true,
+  "data": [
+    {
+      "eventId": "nba-ev-311286",
+      "leagueId": "nba",
+      "bookmakers": [
+        {
+          "bookmakerId": "fanduel",
+          "sourceType": "sportsbook",
+          "markets": [{ "marketType": "player_points", "outcomes": [{ "name": "Over", "description": "Jayson Tatum", "point": 29.5, "price": 120 }] }]
+        },
+        {
+          "bookmakerId": "prizepicks",
+          "sourceType": "dfs",
+          "markets": [{ "marketType": "player_points", "outcomes": [{ "name": "Over", "description": "Jayson Tatum", "point": 29.5, "price": 125 }] }]
+        },
+        {
+          "bookmakerId": "kalshi",
+          "sourceType": "exchange",
+          "markets": [{ "marketType": "player_points", "outcomes": [{ "name": "Over", "description": "Jayson Tatum", "point": 29.5, "price": 118 }] }]
+        }
+      ]
+    }
+  ],
+  "meta": { "count": 1, "page": 1 }
 }`,
   },
   {
@@ -185,7 +197,7 @@ export default function LandingPage() {
           {/* Right — API demo */}
           <div>
             <p className="text-[15px] ml-text-muted mb-6 leading-relaxed">
-              MoneyLine Sports data delivers normalized odds, props, EV and arbitrage signals, and prediction market feeds in one API &mdash; for founders, developers, and traders building sports analytics and betting products.
+              MoneyLine Sports data delivers normalized odds, props, EV and arbitrage signals, plus DFS and prediction-market feeds in one API &mdash; for founders, developers, and traders building sports analytics and betting products.
             </p>
 
             {/* Endpoint selector */}
@@ -262,7 +274,7 @@ export default function LandingPage() {
       <section className="py-10 sm:py-16 border-b border-[#e0e0e0]">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
           {[
-            { num: 'US', label: 'Books + Exchanges' },
+            { num: 'US', label: 'Sportsbooks + DFS + Exchanges' },
             { num: '12', label: 'Leagues covered' },
             { num: '<50', label: 'ms latency' },
             { num: '99.9%', label: 'Uptime' },
@@ -287,7 +299,7 @@ export default function LandingPage() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-10">
             {[
-              { title: 'Normalized Odds', desc: 'Moneyline, spread, and totals from US sportsbooks plus supported exchanges, normalized into a single clean format.' },
+              { title: 'Normalized Odds', desc: 'Moneyline, spread, total, and player-prop markets from US sportsbooks, DFS platforms, and supported exchanges in one clean format.' },
               { title: 'Arbitrage Detection', desc: 'Real-time arb scanning across all books. We find the edges so you don\u2019t have to.' },
               { title: 'Expected Value', desc: 'Pre-computed +EV signals using consensus probability models across the full market.' },
               { title: 'Live Scores', desc: 'Real-time scores with period breakdowns, game clocks, and play-by-play data.' },
@@ -307,13 +319,54 @@ export default function LandingPage() {
       <section className="ml-dark-bg py-10 sm:py-16 lg:py-24">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 text-center">
           <h2 className="text-2xl min-[480px]:text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-white">
-            One API. Every book.
+            One API. Every venue.
           </h2>
           <p className="text-base text-white/70 mt-4 max-w-xl mx-auto">
-            We aggregate and normalize odds from every major US sportsbook into a single, consistent feed.
+            We aggregate and normalize pricing from major US sportsbooks, DFS pick&apos;em platforms, and exchanges into a single, consistent feed.
           </p>
           <div className="flex flex-wrap justify-center gap-3 mt-10">
-            {['DraftKings', 'FanDuel', 'BetMGM', 'Caesars', 'PointsBet', 'BetRivers', 'Bovada', 'LowVig', 'Pinnacle'].map((book) => (
+            {[
+              'DraftKings',
+              'FanDuel',
+              'BetMGM',
+              'Caesars',
+              'PointsBet (US)',
+              'William Hill (US)',
+              'BetRivers',
+              'Unibet (US)',
+              'Bovada',
+              'BetOnline.ag',
+              'MyBookie.ag',
+              'LowVig.ag',
+              'Barstool Sportsbook',
+              'BetUS',
+              'WynnBET',
+              'SuperBook',
+              'bet365 (US)',
+              'ESPN BET',
+              'Fanatics',
+              'Fliff',
+              'Hard Rock Bet',
+              'Hard Rock Bet (AZ)',
+              'Tipico (US)',
+              'BetAnySports',
+              'Betr (US)',
+              'Pinnacle',
+              'betParx',
+              'Bally Bet',
+              'Rebet',
+              'PrizePicks',
+              'Underdog Fantasy',
+              'DraftKings Pick6',
+              'Betr Picks',
+              'Betfair Exchange (US)',
+              'Sporttrade',
+              'Kalshi',
+              'Novig',
+              'Polymarket',
+              'ProphetX',
+              'BetOpenly',
+            ].map((book) => (
               <span key={book} className="border border-[#2a2a2a] text-white/80 px-4 py-2 rounded-full text-sm font-medium">
                 {book}
               </span>
@@ -385,7 +438,7 @@ export default function LandingPage() {
               </p>
               <p className="text-xs text-[#888] mt-1 mb-4">1.5M credits/mo</p>
               <ul className="space-y-2 flex-1">
-                {['Everything in Starter', 'Edge data (arb, EV)', 'Play-by-play', 'All bookmakers + exchanges', '200 req/min', '1-year history'].map((f) => (
+                {['Everything in Starter', 'Edge data (arb, EV)', 'Play-by-play', 'All sportsbooks + DFS + exchanges', '200 req/min', '1-year history'].map((f) => (
                   <li key={f} className="flex items-start gap-1.5 text-xs text-white/70">
                     <span className="text-green-400 mt-0.5">&#10003;</span> {f}
                   </li>

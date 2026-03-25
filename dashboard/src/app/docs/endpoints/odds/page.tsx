@@ -5,10 +5,12 @@ export default function OddsEndpointsPage() {
     <div>
       <h1 className="text-3xl font-bold text-[#1a1a1a]">Odds</h1>
       <p className="text-[15px] text-[#4a4a4a] leading-relaxed mt-3 max-w-2xl">
-        Access real-time betting odds from US sportsbooks plus supported
-        exchanges and prediction-market venues, normalized into one consistent
-        format. The number of bookmakers returned depends on your tier: Free
-        (0), Hobbyist (1), Pro (all).
+        Access real-time betting odds and player props from US sportsbooks,
+        supported DFS pick&apos;em platforms, and exchange/prediction-market
+        venues, normalized into one consistent format. DFS prices are
+        indicative and exposed in American odds for side-by-side comparison.
+        The number of bookmakers returned depends on your tier: Free (0),
+        Starter (1), Pro (all).
       </p>
 
       <h2 className="text-xl font-semibold text-[#1a1a1a] mt-10 mb-1">Browse Odds</h2>
@@ -28,13 +30,13 @@ export default function OddsEndpointsPage() {
             name: 'sourceType',
             type: 'string',
             required: false,
-            description: 'all, sportsbook, exchange',
+            description: 'all, sportsbook, dfs, exchange',
           },
           {
             name: 'market',
             type: 'string',
             required: false,
-            description: 'moneyline, spreads, totals',
+            description: 'moneyline, spread, total, player_points, player_pass_yds, etc.',
           },
           {
             name: 'bookmaker',
@@ -94,7 +96,7 @@ export default function OddsEndpointsPage() {
             name: 'sourceType',
             type: 'string',
             required: false,
-            description: 'all, sportsbook, exchange',
+            description: 'all, sportsbook, dfs, exchange',
           },
         ]}
       />
@@ -103,14 +105,14 @@ export default function OddsEndpointsPage() {
       <EndpointCard
         method="GET"
         path="/v1/odds/bookmakers"
-        description="List all tracked bookmakers and exchanges."
+        description="List all tracked sportsbooks, DFS platforms, and exchanges."
         tier="starter"
         params={[
           {
             name: 'sourceType',
             type: 'string',
             required: false,
-            description: 'all, sportsbook, exchange',
+            description: 'all, sportsbook, dfs, exchange',
           },
         ]}
         response={`{
@@ -119,6 +121,7 @@ export default function OddsEndpointsPage() {
     "count": 3,
     "bookmakers": [
       { "bookmakerId": "draftkings", "name": "DraftKings", "sourceType": "sportsbook", "sourceRegion": "us" },
+      { "bookmakerId": "prizepicks", "name": "PrizePicks", "sourceType": "dfs", "sourceRegion": "us_dfs" },
       { "bookmakerId": "espnbet", "name": "ESPN BET", "sourceType": "sportsbook", "sourceRegion": "us2" },
       { "bookmakerId": "kalshi", "name": "Kalshi", "sourceType": "exchange", "sourceRegion": "us_ex" }
     ]

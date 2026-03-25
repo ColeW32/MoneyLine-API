@@ -6,8 +6,8 @@ export default function DocsPage() {
       {/* Hero */}
       <h1 className="text-3xl font-bold ml-text">MoneyLine API Documentation</h1>
       <p className="text-[15px] text-[#4a4a4a] leading-relaxed mt-3 max-w-2xl">
-        Unified sports data API for scores, odds, and edge analysis across NFL,
-        NBA, MLB, and NHL.
+        Unified sports data API for scores, odds, DFS props, exchanges, and
+        edge analysis across NFL, NBA, MLB, and NHL.
       </p>
 
       {/* Quick Start */}
@@ -70,12 +70,12 @@ export default function DocsPage() {
             detail: 'Live game scores, statuses, and box score data.',
           },
           {
-            label: 'Odds Across Books + Exchanges',
-            detail: 'Spreads, totals, and moneylines from US sportsbooks plus supported exchanges.',
+            label: 'Odds Across All Venue Types',
+            detail: 'Game lines and player props from US sportsbooks, DFS pick&apos;em sites, and supported exchanges.',
           },
           {
             label: 'Edge Analysis',
-            detail: 'Arbitrage opportunities, expected value, and value bets.',
+            detail: 'Arbitrage opportunities, expected value, and value bets across sportsbooks, DFS, and exchanges.',
           },
           {
             label: 'Team Rosters',

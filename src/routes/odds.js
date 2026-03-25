@@ -91,7 +91,7 @@ export default async function oddsRoutes(fastify) {
     return success(odds, { count: odds.length, page: pageNum })
   })
 
-  // GET /v1/odds/bookmakers — list available bookmakers and exchanges (starter+)
+  // GET /v1/odds/bookmakers — list available sportsbooks, DFS platforms, and exchanges (starter+)
   fastify.get('/v1/odds/bookmakers', async (request, reply) => {
     const { sourceType } = request.query
 

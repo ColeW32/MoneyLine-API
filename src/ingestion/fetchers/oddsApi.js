@@ -6,6 +6,21 @@
 
 const BASE_URL = () => process.env.DATA_SOURCE_B_BASE_URL || 'https://api.the-odds-api.com'
 const API_KEY = () => process.env.DATA_SOURCE_B_KEY
+const DEFAULT_FEATURED_MARKETS = 'h2h,spreads,totals'
+
+function normalizeMarkets(markets) {
+  if (Array.isArray(markets)) {
+    return markets.filter(Boolean).join(',')
+  }
+  return String(markets || '').trim()
+}
+
+export function getOddsApiRegions({ props = false } = {}) {
+  if (props) {
+    return process.env.ODDS_API_PROP_REGIONS || process.env.ODDS_API_REGIONS || 'us,us2,us_dfs'
+  }
+  return process.env.ODDS_API_REGIONS || 'us,us2,us_ex,us_dfs'
+}
 
 async function fetchJSON(path, params = {}) {
   const url = new URL(`${BASE_URL()}${path}`)
@@ -35,11 +50,22 @@ async function fetchJSON(path, params = {}) {
   }
 }
 
-export function fetchOdds(config, markets = 'h2h,spreads,totals') {
-  const regions = process.env.ODDS_API_REGIONS || 'us,us2,us_ex'
+export function fetchOdds(config, markets = config.oddsApi?.featuredMarkets || DEFAULT_FEATURED_MARKETS) {
+  const regions = getOddsApiRegions()
   return fetchJSON(`/v4/sports/${config.oddsApi.sportKey}/odds`, {
     regions,
-    markets,
+    markets: normalizeMarkets(markets) || DEFAULT_FEATURED_MARKETS,
+    oddsFormat: 'american',
+  })
+}
+
+export function fetchEventOdds(config, eventId, markets, { regions = getOddsApiRegions({ props: true }) } = {}) {
+  const normalizedMarkets = normalizeMarkets(markets)
+  if (!eventId || !normalizedMarkets) return null
+
+  return fetchJSON(`/v4/sports/${config.oddsApi.sportKey}/events/${eventId}/odds`, {
+    regions,
+    markets: normalizedMarkets,
     oddsFormat: 'american',
   })
 }

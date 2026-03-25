@@ -37,6 +37,7 @@ test('normalizeOdds classifies and sorts sportsbooks before exchanges and unknow
         commence_time: '2026-03-24T00:00:00Z',
         bookmakers: [
           { key: 'kalshi', title: 'Kalshi', last_update: '2026-03-24T00:00:00Z', markets: [] },
+          { key: 'prizepicks', title: 'PrizePicks', last_update: '2026-03-24T00:00:00Z', markets: [] },
           { key: 'fanduel', title: 'FanDuel', last_update: '2026-03-24T00:00:00Z', markets: [] },
           { key: 'espnbet', title: 'ESPN BET', last_update: '2026-03-24T00:00:00Z', markets: [] },
           { key: 'mystery_book', title: 'Mystery Book', last_update: '2026-03-24T00:00:00Z', markets: [] },
@@ -49,6 +50,7 @@ test('normalizeOdds classifies and sorts sportsbooks before exchanges and unknow
       [
         ['espnbet', 'us2', 'sportsbook'],
         ['fanduel', 'us', 'sportsbook'],
+        ['prizepicks', 'us_dfs', 'dfs'],
         ['kalshi', 'us_ex', 'exchange'],
         ['mystery_book', 'unknown', 'unknown'],
       ]
@@ -107,4 +109,75 @@ test('detectArbitrage tags mixed sportsbook/exchange arbs and source filtering r
   assert.equal(filterEdgesBySourceType(arbitrageEdges, 'sportsbook').length, 0)
   assert.equal(filterEdgesBySourceType(arbitrageEdges, 'exchange').length, 0)
   assert.equal(filterEdgesBySourceType(arbitrageEdges, 'all').length, 1)
+})
+
+test('detectEdges supports DFS player props with player metadata preserved', () => {
+  const bookmakers = [
+    {
+      bookmakerId: 'fanduel',
+      bookmakerName: 'FanDuel',
+      sourceType: 'sportsbook',
+      sourceRegion: 'us',
+      markets: [
+        {
+          marketType: 'player_points',
+          outcomes: [
+            { name: 'Over', description: 'Jayson Tatum', point: 29.5, price: +125 },
+            { name: 'Under', description: 'Jayson Tatum', point: 29.5, price: -150 },
+          ],
+        },
+      ],
+    },
+    {
+      bookmakerId: 'prizepicks',
+      bookmakerName: 'PrizePicks',
+      sourceType: 'dfs',
+      sourceRegion: 'us_dfs',
+      markets: [
+        {
+          marketType: 'player_points',
+          outcomes: [
+            { name: 'Over', description: 'Jayson Tatum', point: 29.5, price: -105 },
+            { name: 'Under', description: 'Jayson Tatum', point: 29.5, price: -125 },
+          ],
+        },
+      ],
+    },
+    {
+      bookmakerId: 'underdog',
+      bookmakerName: 'Underdog Fantasy',
+      sourceType: 'dfs',
+      sourceRegion: 'us_dfs',
+      markets: [
+        {
+          marketType: 'player_points',
+          outcomes: [
+            { name: 'Over', description: 'Jayson Tatum', point: 29.5, price: -110 },
+            { name: 'Under', description: 'Jayson Tatum', point: 29.5, price: -120 },
+          ],
+        },
+      ],
+    },
+  ]
+
+  const edges = detectEdges(bookmakers)
+  const propEdges = edges.filter((edge) => edge.market === 'player_points' && edge.outcome.includes('Jayson Tatum Over'))
+
+  assert.ok(propEdges.some((edge) => edge.type === 'value'))
+  assert.ok(propEdges.some((edge) => edge.type === 'ev'))
+  assert.ok(propEdges.every((edge) => edge.description === 'Jayson Tatum'))
+  assert.ok(propEdges.every((edge) => edge.point === 29.5))
+  assert.ok(propEdges.some((edge) => edge.sourceType === 'sportsbook'))
+})
+
+test('filterEdgesBySourceType supports DFS edges explicitly', () => {
+  const edges = [
+    { type: 'value', sourceType: 'sportsbook' },
+    { type: 'value', sourceType: 'dfs' },
+    { type: 'ev', sourceType: 'exchange' },
+  ]
+
+  const filtered = filterEdgesBySourceType(edges, 'dfs')
+  assert.equal(filtered.length, 1)
+  assert.equal(filtered[0].sourceType, 'dfs')
 })

@@ -69,19 +69,24 @@ export default function AuthenticationPage() {
             <tr className="border-t border-[#e8e8e8]">
               <td className="px-4 py-3 font-medium text-[#1a1a1a]">Free</td>
               <td className="px-4 py-3">Scores, standings, schedules, rosters</td>
-              <td className="px-4 py-3 text-right whitespace-nowrap">1,000 req/month</td>
+              <td className="px-4 py-3 text-right whitespace-nowrap">1,000 credits/month</td>
             </tr>
             <tr className="border-t border-[#e8e8e8] bg-[#faf9f6]">
-              <td className="px-4 py-3 font-medium text-[#1a1a1a]">Hobbyist</td>
-              <td className="px-4 py-3">+ Odds, injuries, bookmaker data</td>
-              <td className="px-4 py-3 text-right whitespace-nowrap">50,000 req/month</td>
+              <td className="px-4 py-3 font-medium text-[#1a1a1a]">Starter</td>
+              <td className="px-4 py-3">+ Odds, DFS sites, exchanges, injuries, bookmaker catalog</td>
+              <td className="px-4 py-3 text-right whitespace-nowrap">150,000 credits/month</td>
             </tr>
             <tr className="border-t border-[#e8e8e8]">
               <td className="px-4 py-3 font-medium text-[#1a1a1a]">Pro</td>
-              <td className="px-4 py-3">+ Edge analysis, play-by-play, all bookmakers + exchanges</td>
-              <td className="px-4 py-3 text-right whitespace-nowrap">500,000 req/month</td>
+              <td className="px-4 py-3">+ Edge analysis, play-by-play, all sportsbooks + DFS + exchanges</td>
+              <td className="px-4 py-3 text-right whitespace-nowrap">1,500,000 credits/month</td>
             </tr>
             <tr className="border-t border-[#e8e8e8] bg-[#faf9f6]">
+              <td className="px-4 py-3 font-medium text-[#1a1a1a]">Business</td>
+              <td className="px-4 py-3">Everything in Pro + overage billing and priority support</td>
+              <td className="px-4 py-3 text-right whitespace-nowrap">5,000,000 credits/month</td>
+            </tr>
+            <tr className="border-t border-[#e8e8e8]">
               <td className="px-4 py-3 font-medium text-[#1a1a1a]">Enterprise</td>
               <td className="px-4 py-3">Everything + custom feeds</td>
               <td className="px-4 py-3 text-right whitespace-nowrap">Unlimited</td>

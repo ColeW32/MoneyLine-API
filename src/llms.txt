@@ -23,12 +23,12 @@ Keys are created in the dashboard at https://www.moneylineapp.com/dashboard/keys
 | Tier | Price | Credits/mo | Req/min | Odds | Edge | Injuries | Play-by-Play |
 |------|-------|-----------|---------|------|------|----------|-------------|
 | Free | $0 | 1,000 | 10 | — | — | — | — |
-| Starter | $29 | 150,000 | 60 | 1 bookmaker or exchange | — | Yes | — |
-| Pro | $149 | 1,500,000 | 200 | All bookmakers + exchanges | Yes | Yes | Yes |
-| Business | $299 | 5,000,000 | 500 | All bookmakers + exchanges | Yes | Yes | Yes |
-| Enterprise | Custom | Unlimited | Unlimited | All bookmakers + exchanges | Yes | Yes | Yes |
+| Starter | $29 | 150,000 | 60 | 1 venue (sportsbook, DFS, or exchange after filtering) | — | Yes | — |
+| Pro | $149 | 1,500,000 | 200 | All sportsbooks + DFS + exchanges | Yes | Yes | Yes |
+| Business | $299 | 5,000,000 | 500 | All sportsbooks + DFS + exchanges | Yes | Yes | Yes |
+| Enterprise | Custom | Unlimited | Unlimited | All sportsbooks + DFS + exchanges | Yes | Yes | Yes |
 
-Odds coverage includes sportsbooks from the `us` and `us2` regions plus exchanges and prediction markets from the `us_ex` region (e.g. Sporttrade, Kalshi, Betfair Exchange US). The default `sourceType=all` on odds endpoints returns all venue types. Edge endpoints default to `sourceType=sportsbook` to keep signals clean; exchanges are opt-in via `?sourceType=exchange` or `?sourceType=all`.
+Odds coverage includes sportsbooks from the `us` and `us2` regions, DFS pick'em platforms from the `us_dfs` region (e.g. PrizePicks, Underdog, DraftKings Pick6, Betr Picks), plus exchanges and prediction markets from the `us_ex` region (e.g. Sporttrade, Kalshi, Betfair Exchange US). The default `sourceType=all` on odds and edge endpoints returns all venue types, and you can narrow to `sportsbook`, `dfs`, or `exchange` as needed. DFS prices are normalized into American odds for comparison, but remain indicative because DFS multipliers can vary by card composition.
 
 - **1 credit = 1 API request** (account-level, shared across all keys)
 - **Business tier** supports overage billing at $0.00015/credit beyond the limit
@@ -317,23 +317,24 @@ Get stats for a player.
 ### Odds & Bookmakers
 
 #### GET /v1/odds
-Browse odds with filtering. Returns odds from sportsbooks and exchanges by default.
+Browse odds with filtering. Returns odds from sportsbooks, DFS platforms, and exchanges by default.
 
 **Tier:** Starter+
 **Params:**
 | Param | Type | Default | Description |
 |-------|------|---------|-------------|
 | league | string | — | Filter by league ID |
-| market | string | — | `moneyline`, `spreads`, or `totals` |
+| market | string | — | `moneyline`, `spread`, `total`, or any supported prop market such as `player_points` |
 | bookmaker | string | — | Filter by bookmaker key or name |
-| sourceType | string | `all` | `sportsbook`, `exchange`, or `all` |
+| sourceType | string | `all` | `sportsbook`, `dfs`, `exchange`, or `all` |
 | limit | number | 25 | Max 50 |
 | page | number | 1 | Page number |
 
 **Notes:**
-- Starter tier sees 1 bookmaker per event (sportsbooks are prioritized — exchanges appear only when no sportsbook is present).
-- Pro+ sees all bookmakers and exchanges.
-- `sourceType`, `bookmaker`, and `market` filters are applied before tier slicing, so requesting a specific exchange on a Starter key returns that exchange if it is the only match.
+- Starter tier sees 1 venue per event after filtering.
+- Default venue ordering is sportsbook, then DFS, then exchange, then unknown.
+- Pro+ sees all sportsbooks, DFS platforms, and exchanges.
+- `sourceType`, `bookmaker`, and `market` filters are applied before tier slicing, so requesting a specific DFS platform or exchange on a Starter key returns that venue if it is the only match.
 
 **Response:**
 ```json
@@ -350,6 +351,13 @@ Browse odds with filtering. Returns odds from sportsbooks and exchanges by defau
           "bookmakerName": "DraftKings",
           "sourceRegion": "us",
           "sourceType": "sportsbook",
+          "markets": [...]
+        },
+        {
+          "bookmakerId": "prizepicks",
+          "bookmakerName": "PrizePicks",
+          "sourceRegion": "us_dfs",
+          "sourceType": "dfs",
           "markets": [...]
         },
         {
@@ -374,24 +382,25 @@ Get odds for a specific event.
 **Params:**
 | Param | Type | Default | Description |
 |-------|------|---------|-------------|
-| sourceType | string | `all` | `sportsbook`, `exchange`, or `all` |
+| sourceType | string | `all` | `sportsbook`, `dfs`, `exchange`, or `all` |
 
 ---
 
 #### GET /v1/odds/bookmakers
-List all tracked bookmakers and exchanges.
+List all tracked sportsbooks, DFS platforms, and exchanges.
 
 **Tier:** Starter+
 **Params:**
 | Param | Type | Default | Description |
 |-------|------|---------|-------------|
-| sourceType | string | `all` | `sportsbook`, `exchange`, or `all` |
+| sourceType | string | `all` | `sportsbook`, `dfs`, `exchange`, or `all` |
 
 **Response:** Array of `{ bookmakerId, name, sourceType, sourceRegion }`
 
 ```json
 [
   { "bookmakerId": "draftkings",  "name": "DraftKings",  "sourceType": "sportsbook", "sourceRegion": "us" },
+  { "bookmakerId": "prizepicks",  "name": "PrizePicks",  "sourceType": "dfs",        "sourceRegion": "us_dfs" },
   { "bookmakerId": "espnbet",     "name": "ESPN BET",    "sourceType": "sportsbook", "sourceRegion": "us2" },
   { "bookmakerId": "sporttrade",  "name": "Sporttrade",  "sourceType": "exchange",   "sourceRegion": "us_ex" }
 ]
@@ -410,16 +419,17 @@ Browse edge opportunities (arbitrage, value bets, positive EV).
 |-------|------|---------|-------------|
 | type | string | — | `arbitrage`, `value`, or `ev` |
 | league | string | — | Filter by league ID |
-| sourceType | string | `sportsbook` | `sportsbook`, `exchange`, or `all` |
+| sourceType | string | `all` | `sportsbook`, `dfs`, `exchange`, or `all` |
 | minProfit | number | — | Min profit % (arbitrage only) |
 | minEdge | number | — | Min edge % (value bets only) |
 | limit | number | 25 | Max 50 |
 | page | number | 1 | Page number |
 
 **sourceType behavior for edge endpoints:**
-- `sportsbook` (default) — sportsbook-only arbs + sportsbook value/EV bets. Exchange venues are excluded.
+- `sportsbook` — sportsbook-only arbs + sportsbook value/EV bets.
+- `dfs` — DFS-only arbs + DFS value/EV bets.
 - `exchange` — exchange-only arbs + exchange value/EV bets.
-- `all` — all edges including mixed sportsbook/exchange arbitrage.
+- `all` (default) — all edges including mixed arbitrage across sportsbooks, DFS, and exchanges.
 
 **Arbitrage edge payload:**
 ```json
@@ -460,9 +470,9 @@ Browse edge opportunities (arbitrage, value bets, positive EV).
 Get arbitrage opportunities.
 
 **Tier:** Pro+
-**Params:** `?league=nba&minProfit=2&sourceType=sportsbook`
+**Params:** `?league=nba&minProfit=2&sourceType=all`
 
-Default `sourceType=sportsbook`. Use `sourceType=all` to include mixed sportsbook/exchange arbs.
+Default `sourceType=all`. Use `sourceType=sportsbook`, `dfs`, or `exchange` to narrow to one venue type.
 
 ---
 
@@ -470,9 +480,9 @@ Default `sourceType=sportsbook`. Use `sourceType=all` to include mixed sportsboo
 Get value bets where odds exceed fair probability.
 
 **Tier:** Pro+
-**Params:** `?league=nba&minEdge=5&sourceType=sportsbook`
+**Params:** `?league=nba&minEdge=5&sourceType=all`
 
-Default `sourceType=sportsbook`. Edges are emitted as `type: 'value'` with a `valueBet` field.
+Default `sourceType=all`. Edges are emitted as `type: 'value'` with a `valueBet` field.
 
 ---
 
@@ -480,7 +490,7 @@ Default `sourceType=sportsbook`. Edges are emitted as `type: 'value'` with a `va
 Get positive expected value bets (below the value-bet edge threshold).
 
 **Tier:** Pro+
-**Params:** `?league=nba&sourceType=sportsbook`
+**Params:** `?league=nba&sourceType=all`
 
 ---
 
@@ -491,7 +501,7 @@ Get edge data for a specific event.
 **Params:**
 | Param | Type | Default | Description |
 |-------|------|---------|-------------|
-| sourceType | string | `sportsbook` | `sportsbook`, `exchange`, or `all` |
+| sourceType | string | `all` | `sportsbook`, `dfs`, `exchange`, or `all` |
 
 ---
 
@@ -532,6 +542,13 @@ curl -H "x-api-key: ml_live_YOUR_KEY" \
   "https://mlapi.bet/v1/edge/arbitrage?league=nba&sourceType=all"
 ```
 
+### List DFS platforms only (Starter+)
+
+```bash
+curl -H "x-api-key: ml_live_YOUR_KEY" \
+  "https://mlapi.bet/v1/odds/bookmakers?sourceType=dfs"
+```
+
 ### List exchanges only (Starter+)
 
 ```bash
@@ -544,6 +561,13 @@ curl -H "x-api-key: ml_live_YOUR_KEY" \
 ```bash
 curl -H "x-api-key: ml_live_YOUR_KEY" \
   "https://mlapi.bet/v1/events/nba-ev-311310/odds?sourceType=exchange"
+```
+
+### Get DFS player props for a game (Starter+)
+
+```bash
+curl -H "x-api-key: ml_live_YOUR_KEY" \
+  "https://mlapi.bet/v1/odds?league=nba&sourceType=dfs&market=player_points"
 ```
 
 ### Get team roster

@@ -2,8 +2,8 @@
  * Local bookmaker catalog keyed by The Odds API bookmaker key.
  * Used to enrich normalized odds with sourceRegion and sourceType.
  *
- * sourceRegion: us | us2 | us_ex
- * sourceType:   sportsbook | exchange
+ * sourceRegion: us | us2 | us_dfs | us_ex
+ * sourceType:   sportsbook | dfs | exchange
  *
  * Keys not present here are stored with sourceType: 'unknown' and are
  * excluded from edge calculations until mapped.
@@ -44,6 +44,12 @@ const CATALOG = {
   ballybet:         { bookmakerName: 'Bally Bet',              sourceRegion: 'us2',   sourceType: 'sportsbook' },
   rebet:            { bookmakerName: 'Rebet',                  sourceRegion: 'us2',   sourceType: 'sportsbook' },
 
+  // --- us_dfs region: daily fantasy pick'em platforms ---
+  betr_us_dfs:      { bookmakerName: 'Betr Picks',             sourceRegion: 'us_dfs', sourceType: 'dfs' },
+  pick6:            { bookmakerName: 'DraftKings Pick6',       sourceRegion: 'us_dfs', sourceType: 'dfs' },
+  prizepicks:       { bookmakerName: 'PrizePicks',             sourceRegion: 'us_dfs', sourceType: 'dfs' },
+  underdog:         { bookmakerName: 'Underdog Fantasy',       sourceRegion: 'us_dfs', sourceType: 'dfs' },
+
   // --- us_ex region: exchanges and prediction markets ---
   betfair_ex_us:    { bookmakerName: 'Betfair Exchange (US)',  sourceRegion: 'us_ex', sourceType: 'exchange' },
   sporttrade:       { bookmakerName: 'Sporttrade',             sourceRegion: 'us_ex', sourceType: 'exchange' },
@@ -68,12 +74,12 @@ export function getSourceRegion(key) {
 
 /**
  * Comparator for deterministic bookmaker ordering:
- * sportsbooks first, then exchanges, then unknown — alphabetically within each group.
+ * sportsbooks first, then DFS, then exchanges, then unknown — alphabetically within each group.
  */
 export function bookmakerSortComparator(a, b) {
-  const typeOrder = { sportsbook: 0, exchange: 1, unknown: 2 }
-  const aOrder = typeOrder[a.sourceType] ?? 2
-  const bOrder = typeOrder[b.sourceType] ?? 2
+  const typeOrder = { sportsbook: 0, dfs: 1, exchange: 2, unknown: 3 }
+  const aOrder = typeOrder[a.sourceType] ?? 3
+  const bOrder = typeOrder[b.sourceType] ?? 3
   if (aOrder !== bOrder) return aOrder - bOrder
   return (a.bookmakerName || '').localeCompare(b.bookmakerName || '')
 }

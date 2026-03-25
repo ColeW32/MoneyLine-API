@@ -4,14 +4,114 @@ import { americanToImplied, americanToDecimal, kellyFraction } from '../utils/od
 const VALUE_BET_THRESHOLD = 0.03  // 3% edge minimum for value classification
 const EV_THRESHOLD = 0.01         // 1% EV minimum
 
+function isBinaryOutcomeName(name) {
+  const normalized = String(name || '').trim().toLowerCase()
+  return normalized === 'over'
+    || normalized === 'under'
+    || normalized === 'yes'
+    || normalized === 'no'
+}
+
+function canonicalPointValue(marketType, outcome) {
+  if (outcome?.point == null) return null
+
+  const numericPoint = Number(outcome.point)
+  if (!Number.isFinite(numericPoint)) return outcome.point
+
+  if (String(marketType || '').includes('spread') && !isBinaryOutcomeName(outcome.name)) {
+    return Math.abs(numericPoint)
+  }
+
+  return numericPoint
+}
+
+function formatPoint(point, outcomeName) {
+  if (point == null) return null
+
+  const numericPoint = Number(point)
+  if (!Number.isFinite(numericPoint)) return String(point)
+
+  if (!isBinaryOutcomeName(outcomeName) && numericPoint > 0) {
+    return `+${numericPoint}`
+  }
+
+  return String(numericPoint)
+}
+
+function buildOutcomeLabel({ outcomeName, description, point }) {
+  const parts = []
+  if (description) parts.push(description)
+  if (outcomeName) parts.push(outcomeName)
+  const formattedPoint = formatPoint(point, outcomeName)
+  if (formattedPoint != null) parts.push(formattedPoint)
+  return parts.join(' ').trim() || String(outcomeName || description || '')
+}
+
+function buildPropositionKey(marketType, outcome) {
+  return [
+    marketType,
+    outcome.description || '',
+    canonicalPointValue(marketType, outcome) ?? '',
+  ].join(':')
+}
+
+function collectPropositions(bookmakers) {
+  const propositions = new Map()
+
+  for (const bk of bookmakers) {
+    if (bk.sourceType === 'unknown') continue
+
+    for (const market of bk.markets || []) {
+      for (const outcome of market.outcomes || []) {
+        const propositionKey = buildPropositionKey(market.marketType, outcome)
+        if (!propositions.has(propositionKey)) {
+          propositions.set(propositionKey, {
+            marketType: market.marketType,
+            description: outcome.description || null,
+            point: canonicalPointValue(market.marketType, outcome),
+            selections: new Map(),
+          })
+        }
+
+        const selectionKey = String(outcome.name || '').trim().toLowerCase()
+        const proposition = propositions.get(propositionKey)
+
+        if (!proposition.selections.has(selectionKey)) {
+          proposition.selections.set(selectionKey, [])
+        }
+
+        proposition.selections.get(selectionKey).push({
+          bookmaker: bk.bookmakerName,
+          bookmakerId: bk.bookmakerId,
+          sourceType: bk.sourceType,
+          sourceRegion: bk.sourceRegion,
+          price: outcome.price,
+          marketType: market.marketType,
+          outcomeName: outcome.name,
+          description: outcome.description || null,
+          point: outcome.point ?? null,
+          propositionPoint: proposition.point,
+          outcomeLabel: buildOutcomeLabel({
+            outcomeName: outcome.name,
+            description: outcome.description,
+            point: outcome.point,
+          }),
+        })
+      }
+    }
+  }
+
+  return propositions
+}
+
 /**
  * Determine the venueType of an arb edge from its participating legs.
- * Returns 'sportsbook', 'exchange', or 'mixed'.
+ * Returns 'sportsbook', 'dfs', 'exchange', or 'mixed'.
  */
 function arbVenueType(legs) {
   const types = new Set(legs.map((l) => l.sourceType).filter((t) => t && t !== 'unknown'))
   if (types.size === 0) return 'unknown'
-  if (types.size === 1) return [...types][0] === 'exchange' ? 'exchange' : 'sportsbook'
+  if (types.size === 1) return [...types][0]
   return 'mixed'
 }
 
@@ -24,58 +124,44 @@ function arbVenueType(legs) {
  */
 export function detectArbitrage(bookmakers) {
   const edges = []
-  const moneylineOutcomes = new Map() // outcomeName → [{bookmaker, bookmakerId, sourceType, sourceRegion, price}]
+  const propositions = collectPropositions(bookmakers)
 
-  for (const bk of bookmakers) {
-    if (bk.sourceType === 'unknown') continue
-    for (const market of bk.markets || []) {
-      if (market.marketType !== 'moneyline') continue
-      for (const outcome of market.outcomes || []) {
-        if (!moneylineOutcomes.has(outcome.name)) {
-          moneylineOutcomes.set(outcome.name, [])
-        }
-        moneylineOutcomes.get(outcome.name).push({
-          bookmaker: bk.bookmakerName,
-          bookmakerId: bk.bookmakerId,
-          sourceType: bk.sourceType,
-          sourceRegion: bk.sourceRegion,
-          price: outcome.price,
-        })
-      }
-    }
-  }
+  for (const proposition of propositions.values()) {
+    if (proposition.selections.size !== 2) continue
 
-  const outcomeNames = [...moneylineOutcomes.keys()]
-  if (outcomeNames.length !== 2) return edges
+    const best = [...proposition.selections.values()].map((offers) =>
+      offers.reduce((a, b) => (a.price > b.price ? a : b))
+    )
 
-  // Best price for each outcome
-  const best = outcomeNames.map((name) => {
-    const offers = moneylineOutcomes.get(name)
-    return { name, ...offers.reduce((a, b) => (a.price > b.price ? a : b)) }
-  })
+    if (best.length !== 2) continue
 
-  const impliedSum = best.reduce((sum, o) => sum + americanToImplied(o.price), 0)
+    const impliedSum = best.reduce((sum, offer) => sum + americanToImplied(offer.price), 0)
+    if (impliedSum >= 1) continue
 
-  if (impliedSum < 1) {
     const profitPct = ((1 / impliedSum) - 1) * 100
     const totalStake = 1000
-    const stakes = best.map((o) => ({
-      bookmaker: o.bookmaker,
-      bookmakerId: o.bookmakerId,
-      sourceType: o.sourceType,
-      sourceRegion: o.sourceRegion,
-      outcome: o.name,
-      odds: o.price,
-      stake: Math.round((totalStake * americanToImplied(o.price) / impliedSum) * 100) / 100,
+    const stakes = best.map((offer) => ({
+      bookmaker: offer.bookmaker,
+      bookmakerId: offer.bookmakerId,
+      sourceType: offer.sourceType,
+      sourceRegion: offer.sourceRegion,
+      outcome: offer.outcomeName,
+      selection: offer.outcomeLabel,
+      ...(offer.description && { description: offer.description }),
+      ...(offer.point != null && { point: offer.point }),
+      odds: offer.price,
+      stake: Math.round((totalStake * americanToImplied(offer.price) / impliedSum) * 100) / 100,
     }))
 
     edges.push({
       edgeId: `arb-${Date.now()}`,
       type: 'arbitrage',
       venueType: arbVenueType(best),
-      market: 'moneyline',
-      outcome: best.map((b) => b.name).join(' vs '),
-      bookmakers: best.map((b) => b.bookmaker),
+      market: proposition.marketType,
+      outcome: best.map((offer) => offer.outcomeLabel).join(' vs '),
+      ...(proposition.description && { description: proposition.description }),
+      ...(proposition.point != null && { point: proposition.point }),
+      bookmakers: best.map((offer) => offer.bookmaker),
       arbitrage: {
         books: stakes,
         totalStake,
@@ -102,92 +188,90 @@ export function detectArbitrage(bookmakers) {
  */
 export function detectEdges(bookmakers) {
   const edges = []
-  const outcomeData = new Map() // key → [{bookmaker, bookmakerId, sourceType, sourceRegion, price, marketType, outcomeName}]
+  const propositions = collectPropositions(bookmakers)
 
-  for (const bk of bookmakers) {
-    if (bk.sourceType === 'unknown') continue
-    for (const market of bk.markets || []) {
-      if (market.marketType !== 'moneyline') continue
-      for (const outcome of market.outcomes || []) {
-        const key = `${market.marketType}:${outcome.name}`
-        if (!outcomeData.has(key)) outcomeData.set(key, [])
-        outcomeData.get(key).push({
-          bookmaker: bk.bookmakerName,
-          bookmakerId: bk.bookmakerId,
-          sourceType: bk.sourceType,
-          sourceRegion: bk.sourceRegion,
-          price: outcome.price,
-          marketType: market.marketType,
-          outcomeName: outcome.name,
-        })
-      }
-    }
-  }
+  for (const proposition of propositions.values()) {
+    for (const offers of proposition.selections.values()) {
+      if (offers.length < 2) continue
 
-  for (const [, offers] of outcomeData) {
-    if (offers.length < 2) continue
+      const impliedProbs = offers.map((offer) => americanToImplied(offer.price))
+      const consensusProb = impliedProbs.reduce((a, b) => a + b, 0) / impliedProbs.length
 
-    const impliedProbs = offers.map((o) => americanToImplied(o.price))
-    const consensusProb = impliedProbs.reduce((a, b) => a + b, 0) / impliedProbs.length
+      for (const offer of offers) {
+        const impliedProb = americanToImplied(offer.price)
+        const edgePct = (consensusProb - impliedProb) * 100
+        const decimalOdds = americanToDecimal(offer.price)
+        const ev = (consensusProb * (decimalOdds - 1)) - (1 - consensusProb)
+        const evPct = ev * 100
 
-    for (const offer of offers) {
-      const impliedProb = americanToImplied(offer.price)
-      const edgePct = (consensusProb - impliedProb) * 100
-      const decimalOdds = americanToDecimal(offer.price)
-      const ev = (consensusProb * (decimalOdds - 1)) - (1 - consensusProb)
-      const evPct = ev * 100
-
-      if (edgePct > VALUE_BET_THRESHOLD * 100) {
-        edges.push({
-          edgeId: `value-${Date.now()}-${offer.bookmakerId}`,
-          type: 'value',
-          sourceType: offer.sourceType,
-          sourceRegion: offer.sourceRegion,
-          market: offer.marketType,
-          outcome: offer.outcomeName,
-          bookmakers: [offer.bookmaker],
-          valueBet: {
-            bookmaker: offer.bookmaker,
-            bookmakerId: offer.bookmakerId,
+        if (edgePct > VALUE_BET_THRESHOLD * 100) {
+          edges.push({
+            edgeId: `value-${Date.now()}-${offer.bookmakerId}`,
+            type: 'value',
             sourceType: offer.sourceType,
             sourceRegion: offer.sourceRegion,
-            odds: offer.price,
-            impliedProb: Math.round(impliedProb * 1000) / 1000,
-            modelProb: Math.round(consensusProb * 1000) / 1000,
-            edgePct: Math.round(edgePct * 100) / 100,
-            kellyCriterion: Math.round(kellyFraction(consensusProb, offer.price) * 10000) / 10000,
-          },
-          ...(evPct > 0 && {
+            market: offer.marketType,
+            outcome: offer.outcomeLabel,
+            ...(offer.description && { description: offer.description }),
+            ...(offer.propositionPoint != null && { point: offer.propositionPoint }),
+            bookmakers: [offer.bookmaker],
+            valueBet: {
+              bookmaker: offer.bookmaker,
+              bookmakerId: offer.bookmakerId,
+              sourceType: offer.sourceType,
+              sourceRegion: offer.sourceRegion,
+              outcome: offer.outcomeName,
+              selection: offer.outcomeLabel,
+              ...(offer.description && { description: offer.description }),
+              ...(offer.point != null && { point: offer.point }),
+              odds: offer.price,
+              impliedProb: Math.round(impliedProb * 1000) / 1000,
+              modelProb: Math.round(consensusProb * 1000) / 1000,
+              edgePct: Math.round(edgePct * 100) / 100,
+              kellyCriterion: Math.round(kellyFraction(consensusProb, offer.price) * 10000) / 10000,
+            },
+            ...(evPct > 0 && {
+              evBet: {
+                bookmaker: offer.bookmaker,
+                bookmakerId: offer.bookmakerId,
+                outcome: offer.outcomeName,
+                selection: offer.outcomeLabel,
+                ...(offer.description && { description: offer.description }),
+                ...(offer.point != null && { point: offer.point }),
+                odds: offer.price,
+                ev: Math.round(ev * 10000) / 10000,
+                evPct: Math.round(evPct * 100) / 100,
+              },
+            }),
+          })
+        }
+
+        if (evPct > EV_THRESHOLD * 100) {
+          edges.push({
+            edgeId: `ev-${Date.now()}-${offer.bookmakerId}`,
+            type: 'ev',
+            sourceType: offer.sourceType,
+            sourceRegion: offer.sourceRegion,
+            market: offer.marketType,
+            outcome: offer.outcomeLabel,
+            ...(offer.description && { description: offer.description }),
+            ...(offer.propositionPoint != null && { point: offer.propositionPoint }),
+            bookmakers: [offer.bookmaker],
             evBet: {
               bookmaker: offer.bookmaker,
               bookmakerId: offer.bookmakerId,
+              sourceType: offer.sourceType,
+              sourceRegion: offer.sourceRegion,
+              outcome: offer.outcomeName,
+              selection: offer.outcomeLabel,
+              ...(offer.description && { description: offer.description }),
+              ...(offer.point != null && { point: offer.point }),
               odds: offer.price,
               ev: Math.round(ev * 10000) / 10000,
               evPct: Math.round(evPct * 100) / 100,
             },
-          }),
-        })
-      }
-
-      if (evPct > EV_THRESHOLD * 100) {
-        edges.push({
-          edgeId: `ev-${Date.now()}-${offer.bookmakerId}`,
-          type: 'ev',
-          sourceType: offer.sourceType,
-          sourceRegion: offer.sourceRegion,
-          market: offer.marketType,
-          outcome: offer.outcomeName,
-          bookmakers: [offer.bookmaker],
-          evBet: {
-            bookmaker: offer.bookmaker,
-            bookmakerId: offer.bookmakerId,
-            sourceType: offer.sourceType,
-            sourceRegion: offer.sourceRegion,
-            odds: offer.price,
-            ev: Math.round(ev * 10000) / 10000,
-            evPct: Math.round(evPct * 100) / 100,
-          },
-        })
+          })
+        }
       }
     }
   }

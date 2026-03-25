@@ -161,11 +161,14 @@ export function normalizeOdds(oddsApiData, leagueId, sport) {
         lastUpdate: new Date(bk.last_update),
         markets: (bk.markets || []).map((market) => ({
           marketType: normalizeMarketKey(market.key),
+          lastUpdate: market.last_update ? new Date(market.last_update) : new Date(bk.last_update),
           outcomes: (market.outcomes || []).map((o) => ({
             name: o.name,
             price: o.price,
             impliedProbability: americanToImplied(o.price),
+            ...(o.description && { description: o.description }),
             ...(o.point != null && { point: o.point }),
+            ...(o.multiplier != null && { multiplier: o.multiplier }),
           })),
         })),
       }

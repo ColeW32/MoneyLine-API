@@ -37,7 +37,7 @@ export default function LlmsPage() {
           Give your AI assistant or coding LLM everything it needs to integrate with the
           MoneyLine API. Download a single reference file or point your tool at our{' '}
           <code className="text-xs bg-[#eae8e3] px-1.5 py-0.5 rounded font-mono">llms.txt</code>{' '}
-          URL.
+          URL, including the full sportsbook, DFS, and exchange catalog.
         </p>
       </div>
 
@@ -116,6 +116,7 @@ export default function LlmsPage() {
             'All 26 API endpoints',
             'Query parameters & types',
             'Response shapes with examples',
+            'Sportsbook, DFS, and exchange catalog',
             'Tier permissions & credit system',
             'Rate limit details',
             'Error codes & formats',
