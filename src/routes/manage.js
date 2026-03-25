@@ -7,6 +7,16 @@ import { sha256 } from '../utils/hash.js'
 import { success, error } from '../utils/response.js'
 import { TIERS, getTierConfig } from '../config/tiers.js'
 
+function buildApiKeyIdFilter(keyId) {
+  const idFilters = [{ _id: keyId }]
+
+  if (ObjectId.isValid(keyId)) {
+    idFilters.unshift({ _id: new ObjectId(keyId) })
+  }
+
+  return idFilters.length === 1 ? idFilters[0] : { $or: idFilters }
+}
+
 export default async function manageRoutes(fastify) {
   // ──────────────────────────── Auth ────────────────────────────
 
@@ -94,15 +104,15 @@ export default async function manageRoutes(fastify) {
   fastify.delete('/manage/keys/:keyId', { preHandler: verifyJwt }, async (request, reply) => {
     const { keyId } = request.params
 
-    let objectId
-    try {
-      objectId = new ObjectId(keyId)
-    } catch {
+    if (typeof keyId !== 'string' || keyId.trim().length === 0) {
       return reply.code(400).send(error('Invalid key ID.', 400))
     }
 
     const result = await getCollection('api_keys').updateOne(
-      { _id: objectId, userId: request.user.supabaseId },
+      {
+        userId: request.user.supabaseId,
+        ...buildApiKeyIdFilter(keyId),
+      },
       { $set: { status: 'revoked' } }
     )
 

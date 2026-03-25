@@ -8,6 +8,7 @@ export default function KeysPage() {
   const [newKeyName, setNewKeyName] = useState('')
   const [newRawKey, setNewRawKey] = useState('')
   const [creating, setCreating] = useState(false)
+  const [revokingKeyId, setRevokingKeyId] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [copied, setCopied] = useState(false)
 
@@ -40,10 +41,21 @@ export default function KeysPage() {
 
   async function handleRevoke(keyId: string) {
     if (!confirm('Revoke this API key? This cannot be undone.')) return
+    setError('')
+    setRevokingKeyId(keyId)
     try {
       await revokeKey(keyId)
-      loadKeys()
-    } catch {}
+      setKeys((current) =>
+        current.map((key) => (
+          key.id === keyId ? { ...key, status: 'revoked' } : key
+        ))
+      )
+      await loadKeys()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to revoke key')
+    } finally {
+      setRevokingKeyId(null)
+    }
   }
 
   function copyKey() {
@@ -134,9 +146,10 @@ export default function KeysPage() {
                 {key.status === 'active' && (
                   <button
                     onClick={() => handleRevoke(key.id)}
-                    className="text-red-400 hover:text-red-300 text-xs hover:bg-red-500/10 px-3 py-1.5 rounded-lg transition-colors"
+                    disabled={revokingKeyId === key.id}
+                    className="text-red-400 hover:text-red-300 text-xs hover:bg-red-500/10 px-3 py-1.5 rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    Revoke
+                    {revokingKeyId === key.id ? 'Revoking...' : 'Revoke'}
                   </button>
                 )}
               </div>
