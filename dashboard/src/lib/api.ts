@@ -22,16 +22,18 @@ async function request<T>(
 ): Promise<ApiResponse<T>> {
   const { data: { session } } = await supabase.auth.getSession()
   const token = session?.access_token
+  const hasBody = options.body != null
+  const headers: Record<string, string> = {
+    ...(hasBody ? { 'Content-Type': 'application/json' } : {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...Object.fromEntries(new Headers(options.headers).entries()),
+  }
 
   let res: Response
   try {
     res = await fetch(resolveRequestUrl(path), {
       ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token && { Authorization: `Bearer ${token}` }),
-        ...options.headers,
-      },
+      headers,
     })
   } catch (err) {
     throw new ApiError(err instanceof Error ? err.message : 'Request failed', 0)

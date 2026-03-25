@@ -5,16 +5,12 @@ async function proxyRequest(
   path: string[]
 ) {
   const url = new URL(`/auth/${path.join('/')}`, API_URL)
-  if (request.url.includes('?')) {
-    url.search = new URL(request.url).search
-  }
+  url.search = new URL(request.url).search
 
   const headers = new Headers()
   const authorization = request.headers.get('authorization')
-  const contentType = request.headers.get('content-type')
 
   if (authorization) headers.set('authorization', authorization)
-  if (contentType) headers.set('content-type', contentType)
 
   const init: RequestInit = {
     method: request.method,
@@ -24,7 +20,11 @@ async function proxyRequest(
 
   if (request.method !== 'GET' && request.method !== 'HEAD') {
     const body = await request.text()
-    if (body) init.body = body
+    if (body) {
+      init.body = body
+      const contentType = request.headers.get('content-type')
+      if (contentType) headers.set('content-type', contentType)
+    }
   }
 
   const upstream = await fetch(url, init)
