@@ -1,0 +1,165 @@
+/**
+ * Canonical registry of all public API endpoints.
+ * Used by the admin API tester dropdown and the health checker.
+ * Add new endpoints here to have them automatically appear in both.
+ */
+
+export const API_ENDPOINTS = [
+  // ── Reference ──────────────────────────────────────────────
+  {
+    id: 'leagues',
+    category: 'Reference',
+    label: 'List Leagues',
+    method: 'GET',
+    path: '/v1/leagues',
+    healthPath: '/v1/leagues',
+    tier: 'free',
+  },
+  {
+    id: 'teams',
+    category: 'Reference',
+    label: 'List Teams',
+    method: 'GET',
+    path: '/v1/teams?league=nfl',
+    healthPath: '/v1/teams?league=nfl',
+    tier: 'free',
+  },
+  {
+    id: 'players',
+    category: 'Reference',
+    label: 'List Players',
+    method: 'GET',
+    path: '/v1/players?league=nfl',
+    healthPath: '/v1/players?league=nfl',
+    tier: 'free',
+  },
+
+  // ── Events ─────────────────────────────────────────────────
+  {
+    id: 'events',
+    category: 'Events',
+    label: 'List Events',
+    method: 'GET',
+    path: '/v1/events?league=nfl',
+    healthPath: '/v1/events?league=nfl',
+    tier: 'free',
+  },
+  {
+    id: 'events_nba',
+    category: 'Events',
+    label: 'List Events (NBA)',
+    method: 'GET',
+    path: '/v1/events?league=nba',
+    healthPath: '/v1/events?league=nba',
+    tier: 'free',
+  },
+
+  // ── Odds ───────────────────────────────────────────────────
+  {
+    id: 'odds_bookmakers',
+    category: 'Odds',
+    label: 'List Bookmakers',
+    method: 'GET',
+    path: '/v1/odds/bookmakers',
+    healthPath: '/v1/odds/bookmakers',
+    tier: 'starter',
+  },
+  {
+    id: 'odds',
+    category: 'Odds',
+    label: 'List Odds',
+    method: 'GET',
+    path: '/v1/odds?league=nfl&sourceType=all',
+    healthPath: '/v1/odds?league=nfl&sourceType=all',
+    tier: 'starter',
+  },
+  {
+    id: 'odds_dfs',
+    category: 'Odds',
+    label: 'List Odds (DFS)',
+    method: 'GET',
+    path: '/v1/odds?league=nfl&sourceType=dfs',
+    healthPath: '/v1/odds?league=nfl&sourceType=dfs',
+    tier: 'starter',
+  },
+
+  // ── Player Props ────────────────────────────────────────────
+  {
+    id: 'player_props_markets',
+    category: 'Player Props',
+    label: 'List Markets',
+    method: 'GET',
+    path: '/v1/player-props/markets',
+    healthPath: '/v1/player-props/markets',
+    tier: 'starter',
+  },
+  {
+    id: 'player_props',
+    category: 'Player Props',
+    label: 'List Player Props',
+    method: 'GET',
+    path: '/v1/player-props?market=player_points&sourceType=all',
+    healthPath: '/v1/player-props?market=player_points&sourceType=all',
+    tier: 'starter',
+  },
+
+  // ── Edge ───────────────────────────────────────────────────
+  {
+    id: 'edge',
+    category: 'Edge',
+    label: 'Edge Analysis',
+    method: 'GET',
+    path: '/v1/edge?league=nfl&sourceType=all',
+    healthPath: '/v1/edge?league=nfl&sourceType=all',
+    tier: 'pro',
+  },
+  {
+    id: 'edge_value',
+    category: 'Edge',
+    label: 'Value Bets',
+    method: 'GET',
+    path: '/v1/edge/value',
+    healthPath: '/v1/edge/value',
+    tier: 'pro',
+  },
+  {
+    id: 'edge_ev',
+    category: 'Edge',
+    label: 'Expected Value',
+    method: 'GET',
+    path: '/v1/edge/ev',
+    healthPath: '/v1/edge/ev',
+    tier: 'pro',
+  },
+  {
+    id: 'edge_arbitrage',
+    category: 'Edge',
+    label: 'Arbitrage',
+    method: 'GET',
+    path: '/v1/edge/arbitrage',
+    healthPath: '/v1/edge/arbitrage',
+    tier: 'pro',
+  },
+
+  // ── Best Bets ──────────────────────────────────────────────
+  {
+    id: 'best_bets',
+    category: 'Best Bets',
+    label: 'Best Bets',
+    method: 'GET',
+    path: '/v1/best-bets?league=nfl',
+    healthPath: '/v1/best-bets?league=nfl',
+    tier: 'pro',
+  },
+  {
+    id: 'best_bets_nba',
+    category: 'Best Bets',
+    label: 'Best Bets (NBA)',
+    method: 'GET',
+    path: '/v1/best-bets?league=nba',
+    healthPath: '/v1/best-bets?league=nba',
+    tier: 'pro',
+  },
+]
+
+export const ENDPOINT_CATEGORIES = [...new Set(API_ENDPOINTS.map((e) => e.category))]

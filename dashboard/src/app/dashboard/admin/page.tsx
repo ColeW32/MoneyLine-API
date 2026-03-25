@@ -19,14 +19,51 @@ interface AdminStats {
   }[]
 }
 
-async function fetchAdminStats(): Promise<AdminStats | null> {
+interface HealthResult {
+  endpointId: string
+  category: string
+  label: string
+  path: string
+  tier: string
+  status: 'ok' | 'fail' | 'empty' | 'pending' | 'skip'
+  statusCode: number | null
+  responseTimeMs: number | null
+  error: string | null
+  checkedAt: string | null
+}
+
+async function getSession() {
   const { data: { session } } = await supabase.auth.getSession()
+  return session
+}
+
+async function fetchAdminStats(): Promise<AdminStats | null> {
+  const session = await getSession()
   if (!session) return null
   const res = await fetch('/api/admin/stats', {
     headers: { Authorization: `Bearer ${session.access_token}` },
   })
   const data = await res.json()
   return data.success ? data.data : null
+}
+
+async function fetchHealth(): Promise<HealthResult[] | null> {
+  const session = await getSession()
+  if (!session) return null
+  const res = await fetch('/api/admin/health', {
+    headers: { Authorization: `Bearer ${session.access_token}` },
+  })
+  const data = await res.json()
+  return data.success ? data.data.results : null
+}
+
+async function triggerHealthRun(): Promise<void> {
+  const session = await getSession()
+  if (!session) return
+  await fetch('/api/admin/health/run', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${session.access_token}` },
+  })
 }
 
 const TIER_COLORS: Record<string, string> = {
@@ -37,11 +74,21 @@ const TIER_COLORS: Record<string, string> = {
   enterprise: 'text-orange-400',
 }
 
+const STATUS_CONFIG = {
+  ok:      { dot: 'bg-green-400',  text: 'text-green-400',  label: 'OK' },
+  empty:   { dot: 'bg-yellow-400', text: 'text-yellow-400', label: 'Empty' },
+  fail:    { dot: 'bg-red-400',    text: 'text-red-400',    label: 'Fail' },
+  pending: { dot: 'bg-zinc-500',   text: 'text-zinc-500',   label: 'Pending' },
+  skip:    { dot: 'bg-zinc-600',   text: 'text-zinc-500',   label: 'Skip' },
+}
+
 export default function AdminPage() {
   const { user, loading } = useAuth()
   const router = useRouter()
   const [stats, setStats] = useState<AdminStats | null>(null)
+  const [health, setHealth] = useState<HealthResult[] | null>(null)
   const [fetching, setFetching] = useState(true)
+  const [runningChecks, setRunningChecks] = useState(false)
 
   useEffect(() => {
     if (!loading && (!user || !user.isAdmin)) {
@@ -51,11 +98,22 @@ export default function AdminPage() {
 
   useEffect(() => {
     if (!loading && user?.isAdmin) {
-      fetchAdminStats()
-        .then(setStats)
+      Promise.all([fetchAdminStats(), fetchHealth()])
+        .then(([s, h]) => { setStats(s); setHealth(h) })
         .finally(() => setFetching(false))
     }
   }, [loading, user])
+
+  async function handleRunChecks() {
+    setRunningChecks(true)
+    await triggerHealthRun()
+    // Poll for results after a short delay to let checks complete
+    setTimeout(async () => {
+      const h = await fetchHealth()
+      if (h) setHealth(h)
+      setRunningChecks(false)
+    }, 8_000)
+  }
 
   if (loading || fetching) {
     return <div className="text-zinc-400 text-sm">Loading...</div>
@@ -64,6 +122,24 @@ export default function AdminPage() {
   if (!stats) {
     return <div className="text-zinc-400 text-sm">Failed to load admin stats.</div>
   }
+
+  const healthByCategory = health
+    ? health.reduce<Record<string, HealthResult[]>>((acc, r) => {
+        ;(acc[r.category] ||= []).push(r)
+        return acc
+      }, {})
+    : {}
+
+  const healthSummary = health
+    ? {
+        ok: health.filter((r) => r.status === 'ok').length,
+        empty: health.filter((r) => r.status === 'empty').length,
+        fail: health.filter((r) => r.status === 'fail').length,
+        pending: health.filter((r) => r.status === 'pending').length,
+      }
+    : null
+
+  const lastChecked = health?.find((r) => r.checkedAt)?.checkedAt
 
   return (
     <div className="space-y-6">
@@ -138,6 +214,75 @@ export default function AdminPage() {
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* Health monitoring */}
+      <div className="bg-[#1a1d27] rounded-xl border border-white/5 overflow-hidden">
+        <div className="px-5 py-4 border-b border-white/5 flex items-center justify-between">
+          <div>
+            <h2 className="text-sm font-semibold text-white">API Health</h2>
+            <p className="text-xs text-zinc-500 mt-0.5">
+              {lastChecked
+                ? `Last checked ${new Date(lastChecked).toLocaleString()}`
+                : 'Checks run every hour and on server startup'}
+            </p>
+          </div>
+          <div className="flex items-center gap-4">
+            {healthSummary && (
+              <div className="flex items-center gap-3 text-xs">
+                <span className="text-green-400">{healthSummary.ok} ok</span>
+                {healthSummary.empty > 0 && <span className="text-yellow-400">{healthSummary.empty} empty</span>}
+                {healthSummary.fail > 0 && <span className="text-red-400">{healthSummary.fail} fail</span>}
+                {healthSummary.pending > 0 && <span className="text-zinc-500">{healthSummary.pending} pending</span>}
+              </div>
+            )}
+            <button
+              onClick={handleRunChecks}
+              disabled={runningChecks}
+              className="px-3 py-1.5 text-xs font-medium bg-white/5 hover:bg-white/10 text-zinc-300 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {runningChecks ? 'Running...' : 'Run Now'}
+            </button>
+          </div>
+        </div>
+
+        {health && Object.entries(healthByCategory).map(([category, results]) => (
+          <div key={category}>
+            <div className="px-5 py-2 bg-white/[0.02] border-b border-white/5">
+              <span className="text-xs font-medium text-zinc-500 uppercase tracking-wide">{category}</span>
+            </div>
+            {results.map((r) => {
+              const cfg = STATUS_CONFIG[r.status] ?? STATUS_CONFIG.pending
+              return (
+                <div key={r.endpointId} className="flex items-center gap-4 px-5 py-3 border-b border-white/5 last:border-0">
+                  <div className={`w-2 h-2 rounded-full shrink-0 ${cfg.dot}`} />
+                  <div className="flex-1 min-w-0">
+                    <span className="text-sm text-zinc-200">{r.label}</span>
+                    <span className="ml-2 text-xs text-zinc-600 font-mono">{r.path}</span>
+                  </div>
+                  <div className="flex items-center gap-4 shrink-0 text-xs">
+                    {r.responseTimeMs !== null && (
+                      <span className="text-zinc-500">{r.responseTimeMs}ms</span>
+                    )}
+                    {r.statusCode !== null && (
+                      <span className="text-zinc-500">HTTP {r.statusCode}</span>
+                    )}
+                    <span className={`font-medium w-12 text-right ${cfg.text}`}>{cfg.label}</span>
+                  </div>
+                  {r.error && (
+                    <div className="w-full pl-6 -mt-1 pb-2 text-xs text-red-400 font-mono truncate">
+                      {r.error}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        ))}
+
+        {!health && (
+          <div className="px-5 py-8 text-center text-zinc-500 text-sm">No health data yet</div>
+        )}
       </div>
     </div>
   )

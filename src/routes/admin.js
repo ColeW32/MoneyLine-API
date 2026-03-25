@@ -3,6 +3,8 @@ import { getRedis } from '../redis.js'
 import { verifyJwt } from '../middleware/jwtAuth.js'
 import { success, error } from '../utils/response.js'
 import { getTierConfig } from '../config/tiers.js'
+import { API_ENDPOINTS, ENDPOINT_CATEGORIES } from '../config/endpoints.js'
+import { runHealthChecks } from '../ingestion/healthChecker.js'
 
 async function requireAdmin(request, reply) {
   if (!request.user?.isAdmin) {
@@ -64,5 +66,42 @@ export default async function adminRoutes(fastify) {
       platformCreditsUsed: platformTotal,
       topUsers: enriched,
     })
+  })
+
+  // ── Endpoint registry ──────────────────────────────────────
+  fastify.get('/admin/endpoints', { preHandler: [verifyJwt, requireAdmin] }, async () => {
+    return success({ endpoints: API_ENDPOINTS, categories: ENDPOINT_CATEGORIES })
+  })
+
+  // ── Health checks ──────────────────────────────────────────
+  fastify.get('/admin/health', { preHandler: [verifyJwt, requireAdmin] }, async () => {
+    const stored = await getCollection('health_checks').find({}).toArray()
+
+    // Merge stored results with the full endpoint list so new endpoints show as 'pending'
+    const resultMap = Object.fromEntries(stored.map((r) => [r.endpointId, r]))
+    const results = API_ENDPOINTS.map((ep) => {
+      const r = resultMap[ep.id]
+      return {
+        endpointId: ep.id,
+        category: ep.category,
+        label: ep.label,
+        path: ep.healthPath,
+        tier: ep.tier,
+        status: r?.status ?? 'pending',
+        statusCode: r?.statusCode ?? null,
+        responseTimeMs: r?.responseTimeMs ?? null,
+        error: r?.error ?? null,
+        checkedAt: r?.checkedAt ?? null,
+      }
+    })
+
+    return success({ results })
+  })
+
+  // Manually trigger a health check run (useful for on-demand refresh)
+  fastify.post('/admin/health/run', { preHandler: [verifyJwt, requireAdmin] }, async () => {
+    // Run in background, return immediately
+    runHealthChecks().catch((err) => console.error('[health] Manual run failed:', err))
+    return success({ message: 'Health check started.' })
   })
 }

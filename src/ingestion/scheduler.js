@@ -1,5 +1,6 @@
 import cron from 'node-cron'
 import { getCollection } from '../db.js'
+import { runHealthChecks } from './healthChecker.js'
 import {
   SPORTS,
   getAllLeagueIds,
@@ -1225,6 +1226,12 @@ export function startScheduler() {
   const startupBackfillExclusive = startupBackfillExclusiveSetting == null
     ? shouldRunStartupBackfill && startupBackfillLeagues.length === 1
     : parseBooleanEnv(startupBackfillExclusiveSetting)
+
+  // Run an initial health check shortly after startup, then every hour
+  setTimeout(() => runHealthChecks().catch((e) => console.error('[health] Check failed:', e)), 15_000)
+  cron.schedule('0 * * * *', () => {
+    runHealthChecks().catch((e) => console.error('[health] Hourly check failed:', e))
+  })
 
   if (!startupBackfillExclusive) {
     registerLeagueSchedules(leagues)
