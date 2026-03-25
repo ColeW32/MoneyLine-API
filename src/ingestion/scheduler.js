@@ -4,6 +4,7 @@ import {
   SPORTS,
   getAllLeagueIds,
   getCurrentSeason,
+  getPlayerPropMarketKeys,
   getPreviousSeason,
   getSeasonStartDate,
   getSeasonEndDate,
@@ -14,6 +15,7 @@ import { getNormalizer } from './normalizers/index.js'
 import { calculateEdges } from './edgeCalculator.js'
 import { buildSeasonDoc } from './normalizers/shared.js'
 import { bookmakerSortComparator } from './bookmakerCatalog.js'
+import { buildPlayerPropsDocFromOddsDoc } from '../utils/playerProps.js'
 
 /**
  * Upsert an array of normalized documents into a collection.
@@ -77,6 +79,10 @@ function parseStringListEnv(value, fallback = []) {
 function parsePositiveIntegerEnv(value, fallback) {
   const parsed = Number.parseInt(value, 10)
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
+}
+
+function hasGoalserveConfig() {
+  return Boolean(process.env.DATA_SOURCE_A_KEY && process.env.DATA_SOURCE_A_BASE_URL)
 }
 
 function chunkArray(items, size) {
@@ -188,7 +194,7 @@ function getConfiguredPlayerPropMarkets(config) {
   const envKey = `ODDS_API_PLAYER_PROP_MARKETS_${config.leagueId.toUpperCase()}`
   return parseStringListEnv(
     process.env[envKey] || process.env.ODDS_API_PLAYER_PROP_MARKETS,
-    config.oddsApi?.playerPropMarkets || []
+    getPlayerPropMarketKeys(config.leagueId)
   )
 }
 
@@ -557,6 +563,10 @@ function buildPlayerStatUpsertOps(gameDocs) {
 // --- Generic job handlers ---
 
 async function jobScores(config) {
+  if (!hasGoalserveConfig()) {
+    console.log('[scheduler] Skipping scores job — DATA_SOURCE_A_KEY / DATA_SOURCE_A_BASE_URL not set')
+    return
+  }
   const tag = config.leagueId.toUpperCase()
   console.log(`[scheduler] Running ${tag} scores job...`)
   const raw = await fetchScores(config)
@@ -571,6 +581,10 @@ async function jobScores(config) {
 }
 
 async function jobStandings(config) {
+  if (!hasGoalserveConfig()) {
+    console.log('[scheduler] Skipping standings job — DATA_SOURCE_A_KEY / DATA_SOURCE_A_BASE_URL not set')
+    return
+  }
   const tag = config.leagueId.toUpperCase()
   console.log(`[scheduler] Running ${tag} standings job...`)
   const raw = await fetchStandings(config)
@@ -589,6 +603,10 @@ async function jobStandings(config) {
 }
 
 async function jobRosters(config) {
+  if (!hasGoalserveConfig()) {
+    console.log('[scheduler] Skipping rosters job — DATA_SOURCE_A_KEY / DATA_SOURCE_A_BASE_URL not set')
+    return
+  }
   const tag = config.leagueId.toUpperCase()
   console.log(`[scheduler] Running ${tag} rosters job...`)
   let teamCount = 0
@@ -628,6 +646,10 @@ async function jobRosters(config) {
 }
 
 async function jobInjuries(config) {
+  if (!hasGoalserveConfig()) {
+    console.log('[scheduler] Skipping injuries job — DATA_SOURCE_A_KEY / DATA_SOURCE_A_BASE_URL not set')
+    return
+  }
   const tag = config.leagueId.toUpperCase()
   console.log(`[scheduler] Running ${tag} injuries job...`)
   let count = 0
@@ -653,6 +675,10 @@ async function jobInjuries(config) {
 }
 
 export async function jobPlayerStats(config, { backfill = false, seasons } = {}) {
+  if (!hasGoalserveConfig()) {
+    console.log(`[scheduler] Skipping ${config.leagueId.toUpperCase()} player stats job${backfill ? ' (backfill)' : ''} — DATA_SOURCE_A_KEY / DATA_SOURCE_A_BASE_URL not set`)
+    return { skipped: true, reason: 'goalserve_not_configured' }
+  }
   const tag = config.leagueId.toUpperCase()
   const existingRun = activePlayerStatsJobs.get(config.leagueId)
   if (existingRun) {
@@ -956,6 +982,8 @@ async function jobOdds(config) {
   const odds = [...oddsByEventId.values()]
 
   for (const o of odds) {
+    const originalEventId = o.eventId
+
     if (o._sourceHomeTeam && o._sourceAwayTeam) {
       const existingEvent = await getCollection('events').findOne({
         leagueId: config.leagueId,
@@ -980,6 +1008,22 @@ async function jobOdds(config) {
       { $set: o },
       { upsert: true }
     )
+
+    const playerPropsDoc = buildPlayerPropsDocFromOddsDoc(o)
+    if (playerPropsDoc) {
+      await getCollection('player_props').updateOne(
+        { eventId: o.eventId },
+        { $set: playerPropsDoc },
+        { upsert: true }
+      )
+    } else {
+      await getCollection('player_props').deleteOne({ eventId: o.eventId })
+    }
+
+    if (originalEventId !== o.eventId) {
+      await getCollection('odds').deleteOne({ eventId: originalEventId })
+      await getCollection('player_props').deleteOne({ eventId: originalEventId })
+    }
   }
   console.log(`[scheduler] Upserted ${odds.length} ${tag} odds`)
 
@@ -998,28 +1042,33 @@ function registerLeagueSchedules(leagues) {
     const config = SPORTS[leagueId]
     const offset = index * 2
     const leagueMinuteOffset = index * 15
-
-    // Scores: every 10 min, staggered
-    const scoreMins = Array.from({ length: 6 }, (_, i) => (offset + i * 10) % 60).join(',')
-    cron.schedule(`${scoreMins} * * * *`, () => jobScores(config))
+    const goalserveEnabled = hasGoalserveConfig()
 
     // Odds: every 10 min, staggered (offset by 5 from scores)
     const oddsMins = Array.from({ length: 6 }, (_, i) => (offset + 5 + i * 10) % 60).join(',')
     cron.schedule(`${oddsMins} * * * *`, () => jobOdds(config))
 
-    // Standings: every 6 hours, spread out by league across the hour
-    cron.schedule(`${leagueMinuteOffset} */6 * * *`, () => jobStandings(config))
+    if (goalserveEnabled) {
+      // Scores: every 10 min, staggered
+      const scoreMins = Array.from({ length: 6 }, (_, i) => (offset + i * 10) % 60).join(',')
+      cron.schedule(`${scoreMins} * * * *`, () => jobScores(config))
 
-    // Injuries: every 6 hours, offset 5 minutes after standings within each league window
-    cron.schedule(`${(leagueMinuteOffset + 5) % 60} 1,7,13,19 * * *`, () => jobInjuries(config))
+      // Standings: every 6 hours, spread out by league across the hour
+      cron.schedule(`${leagueMinuteOffset} */6 * * *`, () => jobStandings(config))
 
-    // Player stats: every 6 hours, 15 minutes apart by league
-    cron.schedule(`${leagueMinuteOffset} 2,8,14,20 * * *`, () => jobPlayerStats(config))
+      // Injuries: every 6 hours, offset 5 minutes after standings within each league window
+      cron.schedule(`${(leagueMinuteOffset + 5) % 60} 1,7,13,19 * * *`, () => jobInjuries(config))
 
-    // Rosters: daily at 6 AM, 15 minutes apart by league
-    cron.schedule(`${leagueMinuteOffset} 6 * * *`, () => jobRosters(config))
+      // Player stats: every 6 hours, 15 minutes apart by league
+      cron.schedule(`${leagueMinuteOffset} 2,8,14,20 * * *`, () => jobPlayerStats(config))
 
-    console.log(`  - ${config.name}: scores/odds every 10m, standings/injuries 6h (15m stagger), player stats every 6h, rosters daily`)
+      // Rosters: daily at 6 AM, 15 minutes apart by league
+      cron.schedule(`${leagueMinuteOffset} 6 * * *`, () => jobRosters(config))
+
+      console.log(`  - ${config.name}: scores/odds every 10m, standings/injuries 6h (15m stagger), player stats every 6h, rosters daily`)
+    } else {
+      console.log(`  - ${config.name}: odds every 10m (GoalServe jobs disabled; DATA_SOURCE_A not configured)`)
+    }
   })
 }
 
@@ -1031,8 +1080,11 @@ function runInitialFetch(leagues) {
   console.log('[scheduler] Running initial data fetch...')
   for (const leagueId of leagues) {
     const config = SPORTS[leagueId]
-    jobScores(config).catch((e) => console.error(`[scheduler] Initial ${leagueId} scores failed:`, e.message))
-    jobStandings(config).catch((e) => console.error(`[scheduler] Initial ${leagueId} standings failed:`, e.message))
+    if (hasGoalserveConfig()) {
+      jobScores(config).catch((e) => console.error(`[scheduler] Initial ${leagueId} scores failed:`, e.message))
+      jobStandings(config).catch((e) => console.error(`[scheduler] Initial ${leagueId} standings failed:`, e.message))
+    }
+    jobOdds(config).catch((e) => console.error(`[scheduler] Initial ${leagueId} odds failed:`, e.message))
   }
 }
 
@@ -1062,6 +1114,11 @@ export function startScheduler() {
 
   if (!shouldRunStartupBackfill) {
     console.log('[scheduler] Startup player stats backfill disabled (set PLAYER_STATS_STARTUP_BACKFILL=true to enable)')
+    return
+  }
+
+  if (!hasGoalserveConfig()) {
+    console.log('[scheduler] Startup player stats backfill skipped — DATA_SOURCE_A_KEY / DATA_SOURCE_A_BASE_URL not set')
     return
   }
 

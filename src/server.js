@@ -16,6 +16,7 @@ import { logUsage } from './middleware/logUsage.js'
 import leagueRoutes from './routes/leagues.js'
 import teamRoutes from './routes/teams.js'
 import playerRoutes from './routes/players.js'
+import playerPropsRoutes from './routes/playerProps.js'
 import eventRoutes from './routes/events.js'
 import oddsRoutes from './routes/odds.js'
 import edgeRoutes from './routes/edge.js'
@@ -74,6 +75,7 @@ await fastify.register(billingRoutes) // /manage/billing/* (JWT-auth'd)
 await fastify.register(leagueRoutes)
 await fastify.register(teamRoutes)
 await fastify.register(playerRoutes)
+await fastify.register(playerPropsRoutes)
 await fastify.register(eventRoutes)
 await fastify.register(oddsRoutes)
 await fastify.register(edgeRoutes)

@@ -140,6 +140,31 @@ async function run() {
     console.log(`  └${'─'.repeat(82)}`)
   }
 
+  const sampledEventIds = events.map((event) => event.eventId)
+  const playerPropDocs = await getCollection('player_props')
+    .find(
+      { eventId: { $in: sampledEventIds } },
+      { projection: { _id: 0, eventId: 1, players: 1, marketTypes: 1 } }
+    )
+    .toArray()
+
+  console.log()
+  console.log(col('━━━ Player Props Spot-Check ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', BOLD))
+  if (playerPropDocs.length === 0) {
+    console.log(col('  No player_props docs found for sampled events.', YELLOW))
+  } else {
+    for (const doc of playerPropDocs) {
+      const lineCount = (doc.players || []).reduce(
+        (sum, player) => sum + (player.markets || []).reduce((marketSum, market) => marketSum + (market.lines || []).length, 0),
+        0
+      )
+      console.log(
+        `  ${col(doc.eventId, BOLD)}  players=${col((doc.players || []).length, BOLD)}  `
+        + `markets=${col((doc.marketTypes || []).length, BOLD)}  lines=${col(lineCount, BOLD)}`
+      )
+    }
+  }
+
   // ── Edge data spot-check ──────────────────────────────────────────────────
   const edgeFilter = {}
   if (leagueArg) edgeFilter.leagueId = leagueArg

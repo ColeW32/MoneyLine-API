@@ -109,7 +109,8 @@ export default function DocsPage() {
         <strong className="font-medium text-[#1a1a1a]">Authentication</strong> to
         learn how keys work, then explore the{' '}
         <strong className="font-medium text-[#1a1a1a]">Events</strong>,{' '}
-        <strong className="font-medium text-[#1a1a1a]">Odds</strong>, and{' '}
+        <strong className="font-medium text-[#1a1a1a]">Odds</strong>,{' '}
+        <strong className="font-medium text-[#1a1a1a]">Player Props</strong>, and{' '}
         <strong className="font-medium text-[#1a1a1a]">Edge</strong> sections for
         the core data endpoints.
       </p>

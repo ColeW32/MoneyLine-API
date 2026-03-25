@@ -101,6 +101,46 @@ const ENDPOINTS = [
   },
   {
     method: 'GET',
+    path: '/v1/events/{eventId}/player-props',
+    label: 'Player props on the same event ID',
+    example: `GET  /v1/events/nba-ev-311286/player-props?market=player_points&sourceType=all
+
+// Response
+{
+  "success": true,
+  "data": {
+    "eventId": "nba-ev-311286",
+    "leagueId": "nba",
+    "sport": "basketball",
+    "players": [
+      {
+        "playerName": "Jayson Tatum",
+        "markets": [
+          {
+            "marketType": "player_points",
+            "marketName": "Points",
+            "format": "over_under",
+            "isAlternate": false,
+            "lines": [
+              {
+                "point": 29.5,
+                "offers": [
+                  { "bookmakerId": "fanduel", "sourceType": "sportsbook", "selection": "Over", "price": 120 },
+                  { "bookmakerId": "prizepicks", "sourceType": "dfs", "selection": "Over", "price": 125 },
+                  { "bookmakerId": "kalshi", "sourceType": "exchange", "selection": "Over", "price": 118 }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "meta": { "league": "nba", "event": "nba-ev-311286" }
+}`,
+  },
+  {
+    method: 'GET',
     path: '/v1/players/{playerId}/stats',
     label: 'Season summaries and game logs',
     example: `GET  /v1/players/nba-p-12345/stats?type=game&eventId=nba-ev-311286
@@ -197,7 +237,7 @@ export default function LandingPage() {
           {/* Right — API demo */}
           <div>
             <p className="text-[15px] ml-text-muted mb-6 leading-relaxed">
-              MoneyLine Sports data delivers normalized odds, props, EV and arbitrage signals, plus DFS and prediction-market feeds in one API &mdash; for founders, developers, and traders building sports analytics and betting products.
+              MoneyLine Sports data delivers normalized odds, dedicated player props, EV and arbitrage signals, plus DFS and prediction-market feeds in one API &mdash; for founders, developers, and traders building sports analytics and betting products.
             </p>
 
             {/* Endpoint selector */}
@@ -300,6 +340,7 @@ export default function LandingPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-10">
             {[
               { title: 'Normalized Odds', desc: 'Moneyline, spread, total, and player-prop markets from US sportsbooks, DFS platforms, and supported exchanges in one clean format.' },
+              { title: 'Dedicated Player Props', desc: 'Browse player props by event, player, market, and line using the same event IDs returned by events and odds.' },
               { title: 'Arbitrage Detection', desc: 'Real-time arb scanning across all books. We find the edges so you don\u2019t have to.' },
               { title: 'Expected Value', desc: 'Pre-computed +EV signals using consensus probability models across the full market.' },
               { title: 'Live Scores', desc: 'Real-time scores with period breakdowns, game clocks, and play-by-play data.' },

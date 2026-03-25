@@ -16,6 +16,13 @@ async function createIndexes() {
   await db.collection('odds').createIndex({ eventId: 1, fetchedAt: -1 })
   console.log('  - odds indexes created')
 
+  // player_props
+  await db.collection('player_props').createIndex({ eventId: 1 }, { unique: true })
+  await db.collection('player_props').createIndex({ leagueId: 1, fetchedAt: -1 })
+  await db.collection('player_props').createIndex({ leagueId: 1, marketTypes: 1 })
+  await db.collection('player_props').createIndex({ leagueId: 1, playerNames: 1 })
+  console.log('  - player_props indexes created')
+
   // edge_data
   await db.collection('edge_data').createIndex({ eventId: 1, calculatedAt: -1 })
   await db.collection('edge_data').createIndex({ 'edges.type': 1, leagueId: 1, calculatedAt: -1 })

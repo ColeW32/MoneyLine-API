@@ -4,7 +4,7 @@ import { TableOfContents } from '@/components/docs/TableOfContents'
 
 export const metadata = {
   title: 'Documentation — MoneyLine API',
-  description: 'API documentation for MoneyLine — scores, odds, and edge data for NFL, NBA, MLB, and NHL.',
+  description: 'API documentation for MoneyLine — scores, odds, player props, and edge data for NFL, NBA, MLB, and NHL.',
 }
 
 export default function DocsLayout({ children }: { children: React.ReactNode }) {

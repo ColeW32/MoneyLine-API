@@ -2,6 +2,8 @@ import 'dotenv/config'
 import { randomBytes } from 'crypto'
 import { connectDB, closeDB, getCollection } from '../src/db.js'
 import { sha256 } from '../src/utils/hash.js'
+import { calculateEdges } from '../src/ingestion/edgeCalculator.js'
+import { buildPlayerPropsDocFromOddsDoc } from '../src/utils/playerProps.js'
 
 async function seed() {
   await connectDB()
@@ -165,6 +167,8 @@ async function seed() {
         {
           bookmakerId: 'draftkings',
           bookmakerName: 'DraftKings',
+          sourceRegion: 'us',
+          sourceType: 'sportsbook',
           lastUpdate: new Date(),
           markets: [
             {
@@ -188,11 +192,20 @@ async function seed() {
                 { name: 'Under', price: -110, point: 218.5 },
               ],
             },
+            {
+              marketType: 'player_points',
+              outcomes: [
+                { name: 'Over', description: 'Jayson Tatum', price: -110, point: 29.5 },
+                { name: 'Under', description: 'Jayson Tatum', price: -120, point: 29.5 },
+              ],
+            },
           ],
         },
         {
           bookmakerId: 'fanduel',
           bookmakerName: 'FanDuel',
+          sourceRegion: 'us',
+          sourceType: 'sportsbook',
           lastUpdate: new Date(),
           markets: [
             {
@@ -202,11 +215,20 @@ async function seed() {
                 { name: 'New York Knicks', price: 150, impliedProbability: 0.4 },
               ],
             },
+            {
+              marketType: 'player_points',
+              outcomes: [
+                { name: 'Over', description: 'Jayson Tatum', price: 125, point: 29.5 },
+                { name: 'Under', description: 'Jayson Tatum', price: -150, point: 29.5 },
+              ],
+            },
           ],
         },
         {
           bookmakerId: 'betmgm',
           bookmakerName: 'BetMGM',
+          sourceRegion: 'us',
+          sourceType: 'sportsbook',
           lastUpdate: new Date(),
           markets: [
             {
@@ -214,6 +236,61 @@ async function seed() {
               outcomes: [
                 { name: 'Boston Celtics', price: -185, impliedProbability: 0.649 },
                 { name: 'New York Knicks', price: 160, impliedProbability: 0.385 },
+              ],
+            },
+          ],
+        },
+        {
+          bookmakerId: 'prizepicks',
+          bookmakerName: 'PrizePicks',
+          sourceRegion: 'us_dfs',
+          sourceType: 'dfs',
+          lastUpdate: new Date(),
+          markets: [
+            {
+              marketType: 'player_points',
+              outcomes: [
+                { name: 'Over', description: 'Jayson Tatum', price: -105, point: 29.5 },
+                { name: 'Under', description: 'Jayson Tatum', price: -125, point: 29.5 },
+              ],
+            },
+          ],
+        },
+        {
+          bookmakerId: 'underdog',
+          bookmakerName: 'Underdog Fantasy',
+          sourceRegion: 'us_dfs',
+          sourceType: 'dfs',
+          lastUpdate: new Date(),
+          markets: [
+            {
+              marketType: 'player_points',
+              outcomes: [
+                { name: 'Over', description: 'Jayson Tatum', price: -102, point: 29.5 },
+                { name: 'Under', description: 'Jayson Tatum', price: -128, point: 29.5 },
+              ],
+            },
+          ],
+        },
+        {
+          bookmakerId: 'kalshi',
+          bookmakerName: 'Kalshi',
+          sourceRegion: 'us_ex',
+          sourceType: 'exchange',
+          lastUpdate: new Date(),
+          markets: [
+            {
+              marketType: 'moneyline',
+              outcomes: [
+                { name: 'Boston Celtics', price: -165, impliedProbability: 0.623 },
+                { name: 'New York Knicks', price: 170, impliedProbability: 0.37 },
+              ],
+            },
+            {
+              marketType: 'player_points',
+              outcomes: [
+                { name: 'Over', description: 'Jayson Tatum', price: 118, point: 29.5 },
+                { name: 'Under', description: 'Jayson Tatum', price: -142, point: 29.5 },
               ],
             },
           ],
@@ -229,6 +306,8 @@ async function seed() {
         {
           bookmakerId: 'draftkings',
           bookmakerName: 'DraftKings',
+          sourceRegion: 'us',
+          sourceType: 'sportsbook',
           lastUpdate: new Date(),
           markets: [{
             marketType: 'moneyline',
@@ -241,6 +320,8 @@ async function seed() {
         {
           bookmakerId: 'fanduel',
           bookmakerName: 'FanDuel',
+          sourceRegion: 'us',
+          sourceType: 'sportsbook',
           lastUpdate: new Date(),
           markets: [{
             marketType: 'moneyline',
@@ -260,8 +341,20 @@ async function seed() {
       { $set: odd },
       { upsert: true }
     )
+
+    const playerProps = buildPlayerPropsDocFromOddsDoc(odd)
+    if (playerProps) {
+      await getCollection('player_props').updateOne(
+        { eventId: odd.eventId },
+        { $set: playerProps },
+        { upsert: true }
+      )
+    }
   }
   console.log('  - NBA odds seeded')
+
+  await calculateEdges('nba', 'basketball')
+  console.log('  - NBA edge data calculated')
 
   // --- Sample standings ---
   const standings = [

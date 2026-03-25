@@ -18,6 +18,7 @@ const SECTIONS = [
       { label: 'Events & Scores', href: '/docs/endpoints/events' },
       { label: 'Teams & Players', href: '/docs/endpoints/teams' },
       { label: 'Odds', href: '/docs/endpoints/odds', tier: 'Starter+' },
+      { label: 'Player Props', href: '/docs/endpoints/player-props', tier: 'Starter+' },
       { label: 'Edge Data', href: '/docs/endpoints/edge', tier: 'Pro+' },
     ],
   },

@@ -408,6 +408,104 @@ List all tracked sportsbooks, DFS platforms, and exchanges.
 
 ---
 
+### Player Props
+
+Player props use the same canonical `eventId` as the Events and Odds endpoints. If you fetch `eventId` from `/v1/events`, that same identifier works for `/v1/events/:eventId/odds` and `/v1/events/:eventId/player-props`.
+
+#### GET /v1/player-props
+Browse player props grouped by event, player, market, and line.
+
+**Tier:** Starter+
+**Params:**
+| Param | Type | Default | Description |
+|-------|------|---------|-------------|
+| league | string | — | Filter by league ID |
+| market | string | — | Exact prop market key such as `player_points`, `player_pass_yds`, or `pitcher_strikeouts` |
+| player | string | — | Case-insensitive player-name filter |
+| bookmaker | string | — | Filter by bookmaker key or name |
+| sourceType | string | `all` | `sportsbook`, `dfs`, `exchange`, or `all` |
+| limit | number | 25 | Max 50 |
+| page | number | 1 | Page number |
+
+**Notes:**
+- Results are paginated at the event level.
+- V1 uses provider player names and does not attach internal `playerId` values.
+- Starter tier sees 1 venue per event after filtering because the underlying odds feed follows the same venue-slicing rules.
+
+**Response:**
+```json
+{
+  "success": true,
+  "meta": { "count": 1, "page": 1 },
+  "data": [
+    {
+      "eventId": "nba-ev-311310",
+      "leagueId": "nba",
+      "sport": "basketball",
+      "fetchedAt": "2026-03-25T00:10:00.000Z",
+      "players": [
+        {
+          "playerName": "Jayson Tatum",
+          "markets": [
+            {
+              "marketType": "player_points",
+              "marketName": "Points",
+              "format": "over_under",
+              "isAlternate": false,
+              "lines": [
+                {
+                  "point": 29.5,
+                  "offers": [
+                    {
+                      "bookmakerId": "fanduel",
+                      "bookmakerName": "FanDuel",
+                      "sourceType": "sportsbook",
+                      "sourceRegion": "us",
+                      "selection": "Over",
+                      "price": 120,
+                      "impliedProbability": 0.455
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+```
+
+---
+
+#### GET /v1/events/:eventId/player-props
+Get player props for a specific event using the same `eventId` returned by the Events and Odds endpoints.
+
+**Tier:** Starter+
+**Params:**
+| Param | Type | Default | Description |
+|-------|------|---------|-------------|
+| market | string | — | Exact prop market key |
+| player | string | — | Case-insensitive player-name filter |
+| bookmaker | string | — | Filter by bookmaker key or name |
+| sourceType | string | `all` | `sportsbook`, `dfs`, `exchange`, or `all` |
+
+---
+
+#### GET /v1/player-props/markets
+List supported player prop markets by league.
+
+**Tier:** Starter+
+**Params:**
+| Param | Type | Default | Description |
+|-------|------|---------|-------------|
+| league | string | — | Optional league ID to return one league only |
+
+**Response:** Array of `{ leagueId, sport, markets[] }` where each market includes `marketType`, `marketName`, `format`, `isAlternate`, and `supportsPoint`.
+
+---
+
 ### Edge Data & Analysis
 
 #### GET /v1/edge
@@ -563,11 +661,18 @@ curl -H "x-api-key: ml_live_YOUR_KEY" \
   "https://mlapi.bet/v1/events/nba-ev-311310/odds?sourceType=exchange"
 ```
 
-### Get DFS player props for a game (Starter+)
+### Get player props for a game using the same event ID (Starter+)
 
 ```bash
 curl -H "x-api-key: ml_live_YOUR_KEY" \
-  "https://mlapi.bet/v1/odds?league=nba&sourceType=dfs&market=player_points"
+  "https://mlapi.bet/v1/events/nba-ev-311310/player-props?market=player_points&sourceType=all"
+```
+
+### List supported NBA player prop markets (Starter+)
+
+```bash
+curl -H "x-api-key: ml_live_YOUR_KEY" \
+  "https://mlapi.bet/v1/player-props/markets?league=nba"
 ```
 
 ### Get team roster
@@ -611,6 +716,9 @@ curl -H "x-api-key: ml_live_YOUR_KEY" \
 | GET | /v1/odds | Starter | Browse odds |
 | GET | /v1/events/:eventId/odds | Starter | Event odds |
 | GET | /v1/odds/bookmakers | Starter | List bookmakers |
+| GET | /v1/player-props | Starter | Browse player props |
+| GET | /v1/events/:eventId/player-props | Starter | Event player props |
+| GET | /v1/player-props/markets | Starter | Supported player prop markets |
 | GET | /v1/edge | Pro | Browse edge data |
 | GET | /v1/edge/arbitrage | Pro | Arbitrage opportunities |
 | GET | /v1/edge/value | Pro | Value bets |

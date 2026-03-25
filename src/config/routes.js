@@ -11,6 +11,9 @@ export const ROUTE_PERMISSIONS = {
   '/v1/odds': 'starter',
   '/v1/odds/bookmakers': 'starter',
   '/v1/events/:eventId/odds': 'starter',
+  '/v1/player-props': 'starter',
+  '/v1/events/:eventId/player-props': 'starter',
+  '/v1/player-props/markets': 'starter',
   '/v1/teams/:teamId/injuries': 'starter',
 }
 

@@ -9,6 +9,10 @@
     "dev": "node --watch src/server.js",
     "test": "node --test test/**/*.test.js",
     "seed": "node scripts/seed.js",
+    "db:up": "docker compose up -d mongo",
+    "db:down": "docker compose down",
+    "dev:key": "node scripts/createDevApiKey.js",
+    "smoke:api": "node scripts/smokeApi.js",
     "indexes": "node scripts/createIndexes.js",
     "backfill:player-stats": "node scripts/backfillPlayerStats.js",
     "verify:player-stats": "node scripts/verifyPlayerStatsIntegrity.js"

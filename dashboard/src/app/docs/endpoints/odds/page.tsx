@@ -1,4 +1,5 @@
 import { EndpointCard } from '@/components/docs/EndpointCard'
+import Link from 'next/link'
 
 export default function OddsEndpointsPage() {
   return (
@@ -11,6 +12,14 @@ export default function OddsEndpointsPage() {
         indicative and exposed in American odds for side-by-side comparison.
         The number of bookmakers returned depends on your tier: Free (0),
         Starter (1), Pro (all).
+      </p>
+      <p className="text-[14px] text-[#4a4a4a] leading-relaxed mt-3 max-w-2xl">
+        For a player-grouped prop response using the same canonical event IDs,
+        see the{' '}
+        <Link href="/docs/endpoints/player-props" className="underline underline-offset-2 hover:text-[#1a1a1a] transition-colors">
+          Player Props docs
+        </Link>
+        .
       </p>
 
       <h2 className="text-xl font-semibold text-[#1a1a1a] mt-10 mb-1">Browse Odds</h2>
