@@ -44,6 +44,7 @@ const activePlayerStatsJobs = new Map()
 let startupPlayerStatsBackfillActive = false
 const PLAYER_STATS_BACKFILL_JOB = 'player_stats_backfill'
 let criticalPlayerStatsIndexesEnsured = false
+let schedulerCronJobsStarted = false
 
 function parseBooleanEnv(value) {
   return String(value || '').trim().toLowerCase() === 'true'
@@ -299,6 +300,10 @@ function buildDateRange(startDate, endDate) {
   return dates
 }
 
+function toDateKey(date) {
+  return startOfUtcDay(date).toISOString().slice(0, 10)
+}
+
 function getRecentStatsDates() {
   const today = startOfUtcDay(new Date())
   const yesterday = new Date(today)
@@ -370,32 +375,26 @@ async function rebuildSeasonDocs(playerSeasonKeys, { tag } = {}) {
   return seasonCount
 }
 
-function buildPlayerUpsertOps(gameDocs) {
-  const opsByPlayerId = new Map()
-
-  for (const doc of gameDocs) {
-    opsByPlayerId.set(doc.playerId, {
-      updateOne: {
-        filter: { playerId: doc.playerId },
-        update: {
-          $set: {
-            playerId: doc.playerId,
-            teamId: doc.teamId,
-            leagueId: doc.leagueId,
-            name: doc.playerName,
-            position: doc.position || '',
-            updatedAt: new Date(),
-          },
-          $setOnInsert: {
-            status: 'active',
-          },
+function buildPlayerUpsertOps(playerProfiles) {
+  return Array.from(playerProfiles.values()).map((profile) => ({
+    updateOne: {
+      filter: { playerId: profile.playerId },
+      update: {
+        $set: {
+          playerId: profile.playerId,
+          teamId: profile.teamId,
+          leagueId: profile.leagueId,
+          name: profile.playerName,
+          position: profile.position || '',
+          updatedAt: new Date(),
         },
-        upsert: true,
+        $setOnInsert: {
+          status: 'active',
+        },
       },
-    })
-  }
-
-  return [...opsByPlayerId.values()]
+      upsert: true,
+    },
+  }))
 }
 
 function buildPlayerStatUpsertOps(gameDocs) {
@@ -530,36 +529,74 @@ export async function jobPlayerStats(config, { backfill = false, seasons } = {})
     let datesWithStats = 0
     let sampledNoStats = false
     let dateFailures = 0
+    let skippedExistingDates = 0
 
     const normalizer = getNormalizer(config.leagueId)
     const playerSeasonKeys = new Set()
+    const playerProfiles = new Map()
     const backfillWindows = backfill
       ? buildPlayerStatsBackfillWindows(config.leagueId, seasons)
       : []
-    const dates = backfill
-      ? backfillWindows.flatMap(({ startDate, endDate }) => buildDateRange(startDate, endDate))
+    const scheduledDates = backfill
+      ? backfillWindows.flatMap(({ season, startDate, endDate }) =>
+          buildDateRange(startDate, endDate).map((date) => ({ season, date }))
+        )
       : getRecentStatsDates()
+          .map((date) => ({ season: getCurrentSeason(config.leagueId), date }))
+
+    const existingBackfillDateKeys = new Set()
+    if (backfill && backfillWindows.length > 0) {
+      const minDate = backfillWindows.reduce((min, window) => (window.startDate < min ? window.startDate : min), backfillWindows[0].startDate)
+      const maxDate = backfillWindows.reduce((max, window) => (window.endDate > max ? window.endDate : max), backfillWindows[0].endDate)
+      const existingDates = await getCollection('player_stats').distinct('gameDate', {
+        leagueId: config.leagueId,
+        statType: 'game',
+        gameDate: { $gte: minDate, $lte: maxDate },
+      })
+      existingDates.forEach((value) => {
+        if (value) existingBackfillDateKeys.add(toDateKey(new Date(value)))
+      })
+      if (existingBackfillDateKeys.size > 0) {
+        console.log(`[scheduler] ${tag} backfill will skip ${existingBackfillDateKeys.size} date(s) already loaded in MongoDB`)
+      }
+    }
 
     if (backfill && backfillWindows.length > 0) {
       const summary = backfillWindows
         .map(({ season, startDate, endDate }) => `${season} (${formatGoalserveDate(startDate)} → ${formatGoalserveDate(endDate)})`)
         .join(', ')
       console.log(`[scheduler] ${tag} player stats backfill windows: ${summary}`)
-      console.log(`[scheduler] ${tag} player stats backfill will scan ${dates.length} date(s)`)
+      console.log(`[scheduler] ${tag} player stats backfill will scan ${scheduledDates.length} date(s)`)
     }
 
-    for (let index = 0; index < dates.length; index++) {
-      const date = dates[index]
+    for (let index = 0; index < scheduledDates.length; index++) {
+      const { date, season } = scheduledDates[index]
       const dateStartedAt = Date.now()
       const logBackfillDateComplete = (message) => {
         if (!backfill) return
         const durationMs = Date.now() - dateStartedAt
-        console.log(`[scheduler] ${tag} backfill date ${index + 1}/${dates.length} complete in ${(durationMs / 1000).toFixed(1)}s: ${message}`)
+        console.log(`[scheduler] ${tag} backfill date ${index + 1}/${scheduledDates.length} complete in ${(durationMs / 1000).toFixed(1)}s: ${message}`)
       }
 
       try {
         if (backfill) {
-          console.log(`[scheduler] ${tag} backfill date ${index + 1}/${dates.length} starting: ${formatGoalserveDate(date)}`)
+          console.log(`[scheduler] ${tag} backfill date ${index + 1}/${scheduledDates.length} starting: ${formatGoalserveDate(date)}`)
+        }
+
+        const dateKey = toDateKey(date)
+        if (backfill && existingBackfillDateKeys.has(dateKey)) {
+          skippedExistingDates++
+          logBackfillDateComplete('already loaded in MongoDB')
+          if (backfill && ((index + 1) % 5 === 0 || index === scheduledDates.length - 1)) {
+            console.log(`[scheduler] ${tag} backfill progress: ${index + 1}/${scheduledDates.length} dates scanned, ${datesWithMatches} with matches, ${datesWithStats} with stats, ${gameCount} game logs so far, ${skippedExistingDates} existing dates skipped`)
+          }
+          await setPlayerStatsBackfillState(config.leagueId, [season], 'running', {
+            lastCompletedDate: dateKey,
+            lastCompletedAt: new Date(),
+            resumeFromDate: null,
+          })
+          await sleep(25)
+          continue
         }
 
         const raw = await fetchScores(config, formatGoalserveDate(date), {
@@ -568,9 +605,14 @@ export async function jobPlayerStats(config, { backfill = false, seasons } = {})
         })
         if (!raw) {
           logBackfillDateComplete('no payload')
-          if (backfill && ((index + 1) % 5 === 0 || index === dates.length - 1)) {
-            console.log(`[scheduler] ${tag} backfill progress: ${index + 1}/${dates.length} dates scanned, ${datesWithMatches} with matches, ${datesWithStats} with stats, ${gameCount} game logs so far`)
+          if (backfill && ((index + 1) % 5 === 0 || index === scheduledDates.length - 1)) {
+            console.log(`[scheduler] ${tag} backfill progress: ${index + 1}/${scheduledDates.length} dates scanned, ${datesWithMatches} with matches, ${datesWithStats} with stats, ${gameCount} game logs so far, ${skippedExistingDates} existing dates skipped`)
           }
+          await setPlayerStatsBackfillState(config.leagueId, [season], 'running', {
+            lastCompletedDate: dateKey,
+            lastCompletedAt: new Date(),
+            resumeFromDate: null,
+          })
           await sleep(100)
           continue
         }
@@ -602,21 +644,25 @@ export async function jobPlayerStats(config, { backfill = false, seasons } = {})
 
           logBackfillDateComplete(`${historicalEvents.length} events, 0 game logs`)
 
-          if (backfill && ((index + 1) % 5 === 0 || index === dates.length - 1)) {
-            console.log(`[scheduler] ${tag} backfill progress: ${index + 1}/${dates.length} dates scanned, ${datesWithMatches} with matches, ${datesWithStats} with stats, ${gameCount} game logs so far`)
+          if (backfill && ((index + 1) % 5 === 0 || index === scheduledDates.length - 1)) {
+            console.log(`[scheduler] ${tag} backfill progress: ${index + 1}/${scheduledDates.length} dates scanned, ${datesWithMatches} with matches, ${datesWithStats} with stats, ${gameCount} game logs so far, ${skippedExistingDates} existing dates skipped`)
           }
 
+          await setPlayerStatsBackfillState(config.leagueId, [season], 'running', {
+            lastCompletedDate: dateKey,
+            lastCompletedAt: new Date(),
+            resumeFromDate: null,
+          })
           await sleep(100)
           continue
         }
 
         datesWithStats++
 
-        const playerOps = buildPlayerUpsertOps(result.games)
         const playerStatOps = buildPlayerStatUpsertOps(result.games)
 
-        if (playerOps.length > 0) {
-          await getCollection('players').bulkWrite(playerOps, { ordered: false })
+        for (const doc of result.games) {
+          playerProfiles.set(doc.playerId, doc)
         }
 
         if (playerStatOps.length > 0) {
@@ -627,26 +673,46 @@ export async function jobPlayerStats(config, { backfill = false, seasons } = {})
           gameCount++
           playerSeasonKeys.add(`${doc.playerId}::${doc.season}`)
         }
+        existingBackfillDateKeys.add(dateKey)
+
+        await setPlayerStatsBackfillState(config.leagueId, [season], 'running', {
+          lastCompletedDate: dateKey,
+          lastCompletedAt: new Date(),
+          resumeFromDate: null,
+        })
 
         if (backfill) {
           logBackfillDateComplete(`${historicalEvents.length} events, ${result.games.length} game logs`)
         }
 
-        if (backfill && ((index + 1) % 5 === 0 || index === dates.length - 1)) {
-          console.log(`[scheduler] ${tag} backfill progress: ${index + 1}/${dates.length} dates scanned, ${datesWithMatches} with matches, ${datesWithStats} with stats, ${gameCount} game logs so far`)
+        if (backfill && ((index + 1) % 5 === 0 || index === scheduledDates.length - 1)) {
+          console.log(`[scheduler] ${tag} backfill progress: ${index + 1}/${scheduledDates.length} dates scanned, ${datesWithMatches} with matches, ${datesWithStats} with stats, ${gameCount} game logs so far, ${skippedExistingDates} existing dates skipped`)
         }
 
         await sleep(100)
       } catch (err) {
         dateFailures++
         const durationMs = Date.now() - dateStartedAt
-        console.error(`[scheduler] ${tag} backfill date ${index + 1}/${dates.length} failed in ${(durationMs / 1000).toFixed(1)}s: ${formatGoalserveDate(date)}: ${err.message}`)
+        const nextDate = new Date(date)
+        nextDate.setUTCDate(nextDate.getUTCDate() + 1)
+        await setPlayerStatsBackfillState(config.leagueId, [season], 'running', {
+          lastCompletedDate: toDateKey(new Date(date.getTime() - 86_400_000)),
+          lastCompletedAt: new Date(),
+          resumeFromDate: toDateKey(nextDate),
+          lastError: err.message,
+        })
+        console.error(`[scheduler] ${tag} backfill date ${index + 1}/${scheduledDates.length} failed in ${(durationMs / 1000).toFixed(1)}s: ${formatGoalserveDate(date)}: ${err.message}`)
       }
+    }
+
+    const playerOps = buildPlayerUpsertOps(playerProfiles)
+    if (playerOps.length > 0) {
+      await getCollection('players').bulkWrite(playerOps, { ordered: false })
     }
 
     const seasonCount = await rebuildSeasonDocs(playerSeasonKeys, { tag })
     if (backfill) {
-      console.log(`[scheduler] ${tag} backfill: ${datesWithMatches} dates with matches, ${datesWithStats} with stats, ${gameCount} game logs, ${seasonCount} season docs, ${dateFailures} date failures`)
+      console.log(`[scheduler] ${tag} backfill: ${datesWithMatches} dates with matches, ${datesWithStats} with stats, ${gameCount} game logs, ${seasonCount} season docs, ${dateFailures} date failures, ${skippedExistingDates} existing dates skipped`)
     } else {
       console.log(`[scheduler] Upserted ${gameCount} ${tag} player game logs and ${seasonCount} season docs`)
     }
@@ -659,6 +725,7 @@ export async function jobPlayerStats(config, { backfill = false, seasons } = {})
       datesWithMatches,
       datesWithStats,
       dateFailures,
+      skippedExistingDates,
     }
   } finally {
     activePlayerStatsJobs.delete(config.leagueId)
@@ -712,10 +779,11 @@ async function jobOdds(config) {
 
 // --- Schedule setup ---
 
-export function startScheduler() {
-  console.log('[scheduler] Starting cron jobs...')
+function registerLeagueSchedules(leagues) {
+  if (schedulerCronJobsStarted) return
+  schedulerCronJobsStarted = true
 
-  const leagues = getAllLeagueIds()
+  console.log('[scheduler] Starting cron jobs...')
 
   leagues.forEach((leagueId, index) => {
     const config = SPORTS[leagueId]
@@ -744,7 +812,9 @@ export function startScheduler() {
 
     console.log(`  - ${config.name}: scores/odds every 10m, standings/injuries 6h (15m stagger), player stats every 6h, rosters daily`)
   })
+}
 
+function runInitialFetch(leagues) {
   // Run initial fetch for all leagues.
   // Scores and standings fire in parallel (lightweight, no rate-limit risk).
   // Player stats backfills run sequentially so we don't hammer GoalServe with
@@ -755,21 +825,37 @@ export function startScheduler() {
     jobScores(config).catch((e) => console.error(`[scheduler] Initial ${leagueId} scores failed:`, e.message))
     jobStandings(config).catch((e) => console.error(`[scheduler] Initial ${leagueId} standings failed:`, e.message))
   }
+}
+
+export function startScheduler() {
+  const leagues = getAllLeagueIds()
 
   const startupBackfillSetting = process.env.PLAYER_STATS_STARTUP_BACKFILL
   const shouldRunStartupBackfill = startupBackfillSetting == null
     ? true
     : parseBooleanEnv(startupBackfillSetting)
-  if (!shouldRunStartupBackfill) {
-    console.log('[scheduler] Startup player stats backfill disabled (set PLAYER_STATS_STARTUP_BACKFILL=true to enable)')
-    return
-  }
-
   const forceStartupBackfill = parseBooleanEnv(process.env.PLAYER_STATS_STARTUP_BACKFILL_FORCE)
   const startupBackfillLeagues = parseLeagueListEnv(
     process.env.PLAYER_STATS_STARTUP_BACKFILL_LEAGUES,
     ['mlb']
   ).filter((leagueId) => leagues.includes(leagueId))
+  const startupBackfillExclusiveSetting = process.env.PLAYER_STATS_STARTUP_BACKFILL_EXCLUSIVE
+  const startupBackfillExclusive = startupBackfillExclusiveSetting == null
+    ? shouldRunStartupBackfill && startupBackfillLeagues.length === 1
+    : parseBooleanEnv(startupBackfillExclusiveSetting)
+
+  if (!startupBackfillExclusive) {
+    registerLeagueSchedules(leagues)
+    runInitialFetch(leagues)
+  } else {
+    console.log(`[scheduler] Startup backfill exclusive mode enabled for ${startupBackfillLeagues.join(', ')}`)
+  }
+
+  if (!shouldRunStartupBackfill) {
+    console.log('[scheduler] Startup player stats backfill disabled (set PLAYER_STATS_STARTUP_BACKFILL=true to enable)')
+    return
+  }
+
   console.log(`[scheduler] Startup player stats backfill enabled for ${startupBackfillLeagues.join(', ')}${forceStartupBackfill ? ' (force mode)' : ''}`)
 
   startupPlayerStatsBackfillActive = true
@@ -793,6 +879,10 @@ export function startScheduler() {
       console.log(`[scheduler] Initial player stats backfills complete${ranAnyBackfill ? '' : ' (nothing pending)'}`)
     } finally {
       startupPlayerStatsBackfillActive = false
+      if (startupBackfillExclusive) {
+        registerLeagueSchedules(leagues)
+        runInitialFetch(leagues)
+      }
     }
   })()
 }
