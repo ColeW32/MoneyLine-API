@@ -19,6 +19,7 @@ import { buildSeasonDoc } from './normalizers/shared.js'
 import { bookmakerSortComparator } from './bookmakerCatalog.js'
 import { buildPlayerPropsDocFromOddsDoc } from '../utils/playerProps.js'
 import { batchGetMoneylineIds, upsertMoneylineIdMapping } from './idMapper.js'
+import { normalizePlayerNameForMatching, enrichPlayerPropsWithIds } from './playerIdentityResolver.js'
 
 /**
  * Upsert an array of normalized documents into a collection.
@@ -436,6 +437,9 @@ async function ensureCriticalPlayerStatsIndexes() {
   )
   await getCollection('ingestion_state').createIndex({ jobType: 1, status: 1, updatedAt: -1 })
 
+  await getCollection('players').createIndex({ leagueId: 1, normalizedName: 1 })
+  await getCollection('player_props').createIndex({ playerIds: 1 })
+
   criticalPlayerStatsIndexesEnsured = true
   console.log('[scheduler] Critical player stats indexes ready')
 }
@@ -663,6 +667,7 @@ function buildPlayerUpsertOps(playerProfiles) {
           teamId: profile.teamId,
           leagueId: profile.leagueId,
           name: profile.playerName,
+          normalizedName: normalizePlayerNameForMatching(profile.playerName),
           position: profile.position || '',
           updatedAt: new Date(),
         },
@@ -1132,6 +1137,7 @@ async function jobOdds(config) {
 
     const playerPropsDoc = buildPlayerPropsDocFromOddsDoc(o)
     if (playerPropsDoc) {
+      await enrichPlayerPropsWithIds(playerPropsDoc)
       await getCollection('player_props').updateOne(
         { eventId: o.eventId },
         { $set: playerPropsDoc },
