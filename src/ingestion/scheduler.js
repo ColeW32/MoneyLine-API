@@ -837,7 +837,7 @@ export function startScheduler() {
   const forceStartupBackfill = parseBooleanEnv(process.env.PLAYER_STATS_STARTUP_BACKFILL_FORCE)
   const startupBackfillLeagues = parseLeagueListEnv(
     process.env.PLAYER_STATS_STARTUP_BACKFILL_LEAGUES,
-    ['mlb']
+    ['nhl']
   ).filter((leagueId) => leagues.includes(leagueId))
   const startupBackfillExclusiveSetting = process.env.PLAYER_STATS_STARTUP_BACKFILL_EXCLUSIVE
   const startupBackfillExclusive = startupBackfillExclusiveSetting == null
