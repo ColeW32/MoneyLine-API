@@ -31,6 +31,7 @@ export default async function manageRoutes(fastify) {
       createdAt,
       autoUpgrade: userDoc?.autoUpgrade !== false,
       cardOnFile: userDoc?.cardOnFile || false,
+      isAdmin: userDoc?.isAdmin || false,
     })
   })
 

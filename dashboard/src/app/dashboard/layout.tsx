@@ -46,6 +46,27 @@ const NAV = [
   },
 ]
 
+const ADMIN_NAV = [
+  {
+    href: '/dashboard/admin',
+    label: 'Admin',
+    icon: (
+      <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
+      </svg>
+    ),
+  },
+  {
+    href: '/dashboard/admin/api-tester',
+    label: 'API Tester',
+    icon: (
+      <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 7.5l3 2.25-3 2.25m4.5 0h3m-9 8.25h13.5A2.25 2.25 0 0021 18V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v12a2.25 2.25 0 002.25 2.25z" />
+      </svg>
+    ),
+  },
+]
+
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, loading, logout } = useAuth()
   const pathname = usePathname()
@@ -113,6 +134,29 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </Link>
             )
           })}
+          {user.isAdmin && (
+            <>
+              <div className="my-2 border-t border-[#e0ddd8]" />
+              {ADMIN_NAV.map((item) => {
+                const active = pathname === item.href
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    title={collapsed ? item.label : undefined}
+                    className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+                      active
+                        ? 'bg-[#1a1a1a] text-white'
+                        : 'text-[#4a4a4a] hover:bg-[#e8e6e0] hover:text-[#1a1a1a]'
+                    } ${collapsed ? 'justify-center' : ''}`}
+                  >
+                    <span className="shrink-0">{item.icon}</span>
+                    {!collapsed && <span>{item.label}</span>}
+                  </Link>
+                )
+              })}
+            </>
+          )}
         </nav>
 
         {/* Logout at bottom */}

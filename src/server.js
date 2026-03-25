@@ -23,6 +23,7 @@ import edgeRoutes from './routes/edge.js'
 import bestBetsRoutes from './routes/bestBets.js'
 import manageRoutes from './routes/manage.js'
 import billingRoutes from './routes/billing.js'
+import adminRoutes from './routes/admin.js'
 import { startScheduler } from './ingestion/scheduler.js'
 
 const fastify = Fastify({
@@ -45,7 +46,7 @@ await fastify.register(cors, {
 
 // Block browser requests to dashboard routes from unknown origins
 fastify.addHook('onRequest', async (request, reply) => {
-  if (!request.url.startsWith('/manage') && !request.url.startsWith('/auth')) return
+  if (!request.url.startsWith('/manage') && !request.url.startsWith('/auth') && !request.url.startsWith('/admin')) return
   const origin = request.headers.origin
   if (origin && !DASHBOARD_ORIGINS.includes(origin)) {
     return reply.code(403).send({ success: false, error: { message: 'Forbidden', statusCode: 403 } })
@@ -73,6 +74,7 @@ fastify.addHook('onResponse', logUsage)
 // --- Routes ---
 await fastify.register(manageRoutes) // /auth/* and /manage/* (JWT-auth'd, not API-key-auth'd)
 await fastify.register(billingRoutes) // /manage/billing/* (JWT-auth'd)
+await fastify.register(adminRoutes)  // /admin/* (JWT-auth'd, admin-only)
 await fastify.register(leagueRoutes)
 await fastify.register(teamRoutes)
 await fastify.register(playerRoutes)

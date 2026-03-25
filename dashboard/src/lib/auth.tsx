@@ -13,6 +13,7 @@ export interface AppUser {
   creditsUsed: number
   creditsLimit: number
   cardOnFile: boolean
+  isAdmin?: boolean
   createdAt?: string
 }
 
@@ -57,6 +58,7 @@ async function fetchUserFromApi(token: string): Promise<Partial<AppUser>> {
         tier: data.data.tier || 'free',
         autoUpgrade: data.data.autoUpgrade !== false,
         cardOnFile: data.data.cardOnFile || false,
+        isAdmin: data.data.isAdmin || false,
       }
     }
   } catch {
