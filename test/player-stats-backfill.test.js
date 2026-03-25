@@ -6,7 +6,11 @@ import {
   getSeasonEndDate,
   getSeasonStartDate,
 } from '../src/config/sports.js'
-import { buildPlayerStatsBackfillWindows, selectPendingBackfillSeasons } from '../src/ingestion/scheduler.js'
+import {
+  buildPlayerStatsBackfillWindows,
+  isValidLeagueEventId,
+  selectPendingBackfillSeasons,
+} from '../src/ingestion/scheduler.js'
 import { isValidSourceId } from '../src/ingestion/idMapper.js'
 import { buildSyntheticScoreEventId } from '../src/ingestion/normalizers/shared.js'
 
@@ -60,6 +64,14 @@ test('synthetic score event IDs stay league-correct when upstream event ids are 
   assert.equal(eventId.includes('undefined'), false)
   assert.equal(eventId.includes('philadelphia-eagles'), true)
   assert.equal(eventId.includes('green-bay-packers'), true)
+})
+
+test('league event id validation rejects wrong-prefix and undefined-like ids', () => {
+  assert.equal(isValidLeagueEventId('nfl', 'nfl-ev-12345'), true)
+  assert.equal(isValidLeagueEventId('nfl', 'mlb-undefined'), false)
+  assert.equal(isValidLeagueEventId('nfl', 'undefined'), false)
+  assert.equal(isValidLeagueEventId('nfl', ''), false)
+  assert.equal(isValidLeagueEventId('nfl', null), false)
 })
 
 test('selectPendingBackfillSeasons skips completed seasons unless forced', () => {

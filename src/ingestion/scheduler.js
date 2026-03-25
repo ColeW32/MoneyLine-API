@@ -70,6 +70,24 @@ function hasUsableBackfillSummary(summary = {}) {
     || Number(summary.datesWithMatches || 0) > 0
 }
 
+function escapeRegex(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function buildLeagueEventIdRegex(leagueId) {
+  return new RegExp(`^${escapeRegex(leagueId)}-`)
+}
+
+export function isValidLeagueEventId(leagueId, eventId) {
+  if (eventId == null) return false
+
+  const normalized = String(eventId).trim()
+  if (!normalized) return false
+  if (/undefined|null|nan/i.test(normalized)) return false
+
+  return buildLeagueEventIdRegex(leagueId).test(normalized)
+}
+
 function indexKeyMatches(index, keySpec) {
   const current = Object.entries(index.key || {})
   const expected = Object.entries(keySpec || {})
@@ -551,6 +569,7 @@ export async function jobPlayerStats(config, { backfill = false, seasons } = {})
       const existingDates = await getCollection('player_stats').distinct('gameDate', {
         leagueId: config.leagueId,
         statType: 'game',
+        eventId: buildLeagueEventIdRegex(config.leagueId),
         gameDate: { $gte: minDate, $lte: maxDate },
       })
       existingDates.forEach((value) => {
@@ -617,14 +636,35 @@ export async function jobPlayerStats(config, { backfill = false, seasons } = {})
           continue
         }
 
-        const historicalEvents = await normalizer.normalizeScores(raw)
+        let historicalEvents = await normalizer.normalizeScores(raw)
+        const invalidHistoricalEventCount = historicalEvents.filter(
+          (doc) => !isValidLeagueEventId(config.leagueId, doc.eventId)
+        ).length
+        if (invalidHistoricalEventCount > 0) {
+          console.warn(
+            `[scheduler] ${tag} filtered ${invalidHistoricalEventCount} score event(s) with invalid eventId on ${formatGoalserveDate(date)}`
+          )
+          historicalEvents = historicalEvents.filter((doc) =>
+            isValidLeagueEventId(config.leagueId, doc.eventId)
+          )
+        }
         if (historicalEvents.length > 0) {
           datesWithMatches++
           await upsertMany('events', historicalEvents, 'eventId')
         }
 
         const result = await normalizer.normalizePlayerStatsFromScores?.(raw)
-        if (!result?.games?.length) {
+        const validGames = (result?.games || []).filter((doc) =>
+          isValidLeagueEventId(config.leagueId, doc.eventId)
+        )
+        const invalidGameCount = (result?.games?.length || 0) - validGames.length
+        if (invalidGameCount > 0) {
+          console.warn(
+            `[scheduler] ${tag} filtered ${invalidGameCount} player game log(s) with invalid eventId on ${formatGoalserveDate(date)}`
+          )
+        }
+
+        if (!validGames.length) {
           // Log one sample to help diagnose why stats are missing
           if (backfill && !sampledNoStats && historicalEvents.length > 0) {
             sampledNoStats = true
@@ -659,9 +699,9 @@ export async function jobPlayerStats(config, { backfill = false, seasons } = {})
 
         datesWithStats++
 
-        const playerStatOps = buildPlayerStatUpsertOps(result.games)
+        const playerStatOps = buildPlayerStatUpsertOps(validGames)
 
-        for (const doc of result.games) {
+        for (const doc of validGames) {
           playerProfiles.set(doc.playerId, doc)
         }
 
@@ -669,7 +709,7 @@ export async function jobPlayerStats(config, { backfill = false, seasons } = {})
           await getCollection('player_stats').bulkWrite(playerStatOps, { ordered: false })
         }
 
-        for (const doc of result.games) {
+        for (const doc of validGames) {
           gameCount++
           playerSeasonKeys.add(`${doc.playerId}::${doc.season}`)
         }
@@ -682,7 +722,7 @@ export async function jobPlayerStats(config, { backfill = false, seasons } = {})
         })
 
         if (backfill) {
-          logBackfillDateComplete(`${historicalEvents.length} events, ${result.games.length} game logs`)
+          logBackfillDateComplete(`${historicalEvents.length} events, ${validGames.length} game logs`)
         }
 
         if (backfill && ((index + 1) % 5 === 0 || index === scheduledDates.length - 1)) {
@@ -837,7 +877,7 @@ export function startScheduler() {
   const forceStartupBackfill = parseBooleanEnv(process.env.PLAYER_STATS_STARTUP_BACKFILL_FORCE)
   const startupBackfillLeagues = parseLeagueListEnv(
     process.env.PLAYER_STATS_STARTUP_BACKFILL_LEAGUES,
-    ['nhl']
+    ['nfl']
   ).filter((leagueId) => leagues.includes(leagueId))
   const startupBackfillExclusiveSetting = process.env.PLAYER_STATS_STARTUP_BACKFILL_EXCLUSIVE
   const startupBackfillExclusive = startupBackfillExclusiveSetting == null
