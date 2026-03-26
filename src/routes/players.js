@@ -301,12 +301,24 @@ export default async function playerRoutes(fastify) {
 
     const eventIds = events.map((e) => e.eventId)
 
-    const propDocs = await getCollection('player_props')
-      .find(
-        { eventId: { $in: eventIds }, marketTypes: market },
-        { projection: { _id: 0, eventId: 1, players: 1 } }
-      )
-      .toArray()
+    // Use aggregation to filter markets server-side — player_props docs are massive
+    const propDocs = await getCollection('player_props').aggregate([
+      { $match: { eventId: { $in: eventIds }, marketTypes: market } },
+      { $project: {
+        _id: 0, eventId: 1,
+        players: {
+          $map: {
+            input: '$players',
+            as: 'p',
+            in: {
+              playerId: '$$p.playerId',
+              playerName: '$$p.playerName',
+              markets: { $filter: { input: '$$p.markets', as: 'm', cond: { $eq: ['$$m.marketType', market] } } },
+            },
+          },
+        },
+      }},
+    ]).toArray()
 
     if (propDocs.length === 0) {
       return success([], { count: 0, page: pageNum, league, market })
@@ -506,15 +518,32 @@ export default async function playerRoutes(fastify) {
         },
         { projection: { _id: 0, eventId: 1, homeTeamId: 1, awayTeamId: 1, homeTeamName: 1, awayTeamName: 1, startTime: 1 } }
       ),
-      // Player props — query by playerId directly instead of fetching all event IDs first
-      getCollection('player_props')
-        .find(
-          { playerIds: playerId },
-          { projection: { _id: 0, players: 1 } }
-        )
-        .sort({ fetchedAt: -1 })
-        .limit(5)
-        .toArray(),
+      // Player props — use aggregation to only extract this player's matching market
+      getCollection('player_props').aggregate([
+        { $match: { playerIds: playerId } },
+        { $sort: { fetchedAt: -1 } },
+        { $limit: 5 },
+        { $project: {
+          _id: 0,
+          players: {
+            $filter: {
+              input: {
+                $map: {
+                  input: '$players',
+                  as: 'p',
+                  in: {
+                    playerId: '$$p.playerId',
+                    playerName: '$$p.playerName',
+                    markets: { $filter: { input: '$$p.markets', as: 'm', cond: { $eq: ['$$m.marketType', market] } } },
+                  },
+                },
+              },
+              as: 'p',
+              cond: { $eq: ['$$p.playerId', playerId] },
+            },
+          },
+        }},
+      ]).toArray(),
     ])
 
     // Find best bet for this player + market across all today's prop docs

@@ -125,12 +125,31 @@ export default async function playerPropsRoutes(fastify) {
     const pageNum = Math.max(1, parseInt(page) || 1)
     const pageSize = Math.min(50, Math.max(1, parseInt(limit) || 25))
 
-    const docs = await getCollection('player_props')
-      .find(filter, { projection: { _id: 0, marketTypes: 0, playerNames: 0, playerIds: 0 } })
-      .sort({ fetchedAt: -1 })
-      .skip((pageNum - 1) * pageSize)
-      .limit(pageSize)
-      .toArray()
+    // Use aggregation to filter markets server-side and avoid transferring massive documents
+    const pipeline = [
+      { $match: filter },
+      { $sort: { fetchedAt: -1 } },
+      { $skip: (pageNum - 1) * pageSize },
+      { $limit: pageSize },
+      { $project: {
+        _id: 0, eventId: 1, leagueId: 1, sport: 1, fetchedAt: 1,
+        players: {
+          $map: {
+            input: '$players',
+            as: 'p',
+            in: {
+              playerName: '$$p.playerName',
+              playerId: '$$p.playerId',
+              markets: market
+                ? { $filter: { input: '$$p.markets', as: 'm', cond: { $eq: ['$$m.marketType', market] } } }
+                : '$$p.markets',
+            },
+          },
+        },
+      }},
+    ]
+
+    const docs = await getCollection('player_props').aggregate(pipeline).toArray()
 
     const results = docs
       .map((doc) => filterPlayerPropsDoc(doc, { market, player, playerId, bookmaker, sourceType }))
