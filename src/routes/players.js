@@ -65,6 +65,36 @@ async function resolveHitRates(playerId, leagueId, market, line) {
 }
 
 export default async function playerRoutes(fastify) {
+  // GET /v1/players — list players, optionally filtered by league or team
+  fastify.get('/v1/players', async (request, reply) => {
+    const { league, team, limit, page } = request.query
+    const filter = {}
+    if (league) filter.leagueId = league
+    if (team) filter.teamId = team
+
+    const pageNum = Math.max(1, parseInt(page) || 1)
+    const pageSize = Math.min(100, Math.max(1, parseInt(limit) || 50))
+
+    const [players, total] = await Promise.all([
+      getCollection('players')
+        .find(filter, { projection: { _id: 0 } })
+        .sort({ playerName: 1 })
+        .skip((pageNum - 1) * pageSize)
+        .limit(pageSize)
+        .toArray(),
+      getCollection('players').countDocuments(filter),
+    ])
+
+    return success(players, {
+      count: players.length,
+      total,
+      page: pageNum,
+      pages: Math.ceil(total / pageSize),
+      ...(league && { league }),
+      ...(team && { team }),
+    })
+  })
+
   // GET /v1/players/:playerId
   fastify.get('/v1/players/:playerId', async (request, reply) => {
     const { playerId } = request.params

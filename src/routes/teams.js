@@ -3,6 +3,19 @@ import { getCurrentSeason } from '../config/sports.js'
 import { success, error } from '../utils/response.js'
 
 export default async function teamRoutes(fastify) {
+  // GET /v1/teams — list teams, optionally filtered by league
+  fastify.get('/v1/teams', async (request, reply) => {
+    const { league } = request.query
+    const filter = {}
+    if (league) filter.leagueId = league
+
+    const teams = await getCollection('teams')
+      .find(filter, { projection: { _id: 0 } })
+      .toArray()
+
+    return success(teams, { count: teams.length, ...(league && { league }) })
+  })
+
   // GET /v1/leagues/:leagueId/teams
   fastify.get('/v1/leagues/:leagueId/teams', async (request, reply) => {
     const { leagueId } = request.params
