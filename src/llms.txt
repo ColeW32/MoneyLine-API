@@ -412,6 +412,8 @@ List all tracked sportsbooks, DFS platforms, and exchanges.
 
 Player props use the same canonical `eventId` as the Events and Odds endpoints. If you fetch `eventId` from `/v1/events`, that same identifier works for `/v1/events/:eventId/odds` and `/v1/events/:eventId/player-props`.
 
+Every player entry in a props response includes a `playerId` that is the same canonical ID used by `/v1/players/:playerId` and `/v1/players/:playerId/stats`. This means you can filter props by player ID and join prop lines directly against game logs or season stats without any name-matching on your end.
+
 #### GET /v1/player-props
 Browse player props grouped by event, player, market, and line.
 
@@ -421,7 +423,8 @@ Browse player props grouped by event, player, market, and line.
 |-------|------|---------|-------------|
 | league | string | — | Filter by league ID |
 | market | string | — | Exact prop market key such as `player_points`, `player_pass_yds`, or `pitcher_strikeouts` |
-| player | string | — | Case-insensitive player-name filter |
+| player | string | — | Case-insensitive player-name substring filter |
+| playerId | string | — | Exact internal player ID (e.g. `nba-p-4065648`). Faster and unambiguous — use this instead of `player` when you have the ID |
 | bookmaker | string | — | Filter by bookmaker key or name |
 | sourceType | string | `all` | `sportsbook`, `dfs`, `exchange`, or `all` |
 | limit | number | 25 | Max 50 |
@@ -429,7 +432,8 @@ Browse player props grouped by event, player, market, and line.
 
 **Notes:**
 - Results are paginated at the event level.
-- V1 uses provider player names and does not attach internal `playerId` values.
+- Each player entry includes a `playerId` matching the ID returned by `/v1/players` and `/v1/players/:playerId/stats`.
+- `playerId` and `player` can be combined with `market`, `bookmaker`, and `sourceType`.
 - Starter tier sees 1 venue per event after filtering because the underlying odds feed follows the same venue-slicing rules.
 
 **Response:**
@@ -446,6 +450,7 @@ Browse player props grouped by event, player, market, and line.
       "players": [
         {
           "playerName": "Jayson Tatum",
+          "playerId": "nba-p-4065648",
           "markets": [
             {
               "marketType": "player_points",
@@ -487,7 +492,8 @@ Get player props for a specific event using the same `eventId` returned by the E
 | Param | Type | Default | Description |
 |-------|------|---------|-------------|
 | market | string | — | Exact prop market key |
-| player | string | — | Case-insensitive player-name filter |
+| player | string | — | Case-insensitive player-name substring filter |
+| playerId | string | — | Exact internal player ID |
 | bookmaker | string | — | Filter by bookmaker key or name |
 | sourceType | string | `all` | `sportsbook`, `dfs`, `exchange`, or `all` |
 
