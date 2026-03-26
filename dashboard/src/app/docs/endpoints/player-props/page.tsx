@@ -105,6 +105,10 @@ export default function PlayerPropsEndpointsPage() {
             "lines": [
               {
                 "point": 29.5,
+                "summary": {
+                  "Over":  { "fairOdds": -108, "bestOdds": 120, "avgOdds": -112 },
+                  "Under": { "fairOdds": -104, "bestOdds": -105, "avgOdds": -106 }
+                },
                 "offers": [
                   { "bookmakerId": "fanduel", "bookmakerName": "FanDuel", "sourceType": "sportsbook", "sourceRegion": "us", "selection": "Over", "price": 120, "impliedProbability": 0.455 },
                   { "bookmakerId": "kalshi", "bookmakerName": "Kalshi", "sourceType": "exchange", "sourceRegion": "us_ex", "selection": "Over", "price": 118, "impliedProbability": 0.459 }
@@ -119,6 +123,17 @@ export default function PlayerPropsEndpointsPage() {
   "meta": { "league": "nba", "event": "nba-ev-311286" }
 }`}
       />
+
+      <div className="mt-5 rounded-lg border border-[#e0e0e0] bg-[#f5f2eb]/50 px-4 py-3">
+        <p className="text-[13px] font-semibold text-[#1a1a1a]">Line-level summary</p>
+        <ul className="mt-2 list-disc pl-5 space-y-1 text-[13px] leading-relaxed text-[#4a4a4a]">
+          <li>Each <code className="text-[12px] bg-[#f0ede6] px-1 py-0.5 rounded font-mono">line</code> object now includes a <code className="text-[12px] bg-[#f0ede6] px-1 py-0.5 rounded font-mono">summary</code> with fair (no-vig), best, and average odds per selection.</li>
+          <li><strong>fairOdds</strong> removes vig by averaging implied probabilities across books, normalizing the Over/Under pair to sum to 1.0, then converting back to American.</li>
+          <li><strong>bestOdds</strong> is the highest American odds offered by any book for that selection.</li>
+          <li><strong>avgOdds</strong> is the mean implied probability across all books, converted to American.</li>
+          <li>Summary is computed from all bookmakers before tier-based filtering.</li>
+        </ul>
+      </div>
 
       <h2 className="text-xl font-semibold text-[#1a1a1a] mt-10 mb-1">Supported Markets</h2>
       <EndpointCard

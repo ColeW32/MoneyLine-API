@@ -1,5 +1,108 @@
 import { getCollection } from '../db.js'
 import { success, error } from '../utils/response.js'
+import { americanToImplied } from '../utils/odds.js'
+
+/**
+ * Convert an implied probability back to American odds.
+ * Rounded to 1 decimal place.
+ */
+function impliedToAmerican(prob) {
+  if (prob <= 0 || prob >= 1) return null
+  const american = prob >= 0.5
+    ? -(prob / (1 - prob)) * 100
+    : ((1 - prob) / prob) * 100
+  return Math.round(american * 10) / 10
+}
+
+/**
+ * Compute fair odds (no-vig), best odds, and average odds for each outcome
+ * within each market type across all bookmakers.
+ *
+ * Returns: Map<marketType, Map<outcomeName+point, { fairOdds, bestOdds, avgOdds }>>
+ */
+function computeOddsSummary(bookmakers) {
+  // Group all offers by (marketType, outcomeName, point)
+  const groups = new Map()
+
+  for (const bk of bookmakers) {
+    if (bk.sourceType === 'unknown') continue
+    for (const market of bk.markets || []) {
+      for (const outcome of market.outcomes || []) {
+        if (outcome.price == null || !Number.isFinite(outcome.price)) continue
+        const point = (outcome.point != null && Number.isFinite(Number(outcome.point)))
+          ? Number(outcome.point)
+          : null
+        const key = `${market.marketType}|${String(outcome.name || '').trim().toLowerCase()}|${point ?? ''}`
+        if (!groups.has(key)) {
+          groups.set(key, { marketType: market.marketType, name: outcome.name, point, prices: [] })
+        }
+        groups.get(key).prices.push(outcome.price)
+      }
+    }
+  }
+
+  // For each group, compute best, avg, fair
+  // "Fair" = convert all to implied prob, remove vig by normalizing within each market+point line
+  // For binary markets (over/under, home/away), normalize paired outcomes to sum to 1
+  const byMarket = new Map()
+  const groupArr = [...groups.values()]
+
+  // Pair up over/under and home/away outcomes within same (marketType, point)
+  const pairKey = (g) => `${g.marketType}|${g.point ?? ''}`
+  const pairGroups = new Map()
+  for (const g of groupArr) {
+    const pk = pairKey(g)
+    if (!pairGroups.has(pk)) pairGroups.set(pk, [])
+    pairGroups.get(pk).push(g)
+  }
+
+  // Compute fair odds via vig removal for each paired group
+  const fairOddsMap = new Map() // key → fair american odds
+  for (const [, pair] of pairGroups) {
+    if (pair.length !== 2) {
+      // Non-binary — fair = avg implied converted back
+      for (const g of pair) {
+        const avgImplied = g.prices.reduce((s, p) => s + americanToImplied(p), 0) / g.prices.length
+        fairOddsMap.set(groupArr.indexOf(g), impliedToAmerican(avgImplied))
+      }
+      continue
+    }
+    // Binary pair: remove vig by normalizing implied probs
+    const avgImplieds = pair.map((g) =>
+      g.prices.reduce((s, p) => s + americanToImplied(p), 0) / g.prices.length
+    )
+    const total = avgImplieds.reduce((s, v) => s + v, 0)
+    if (total <= 0) continue
+    pair.forEach((g, i) => {
+      const noVigProb = avgImplieds[i] / total
+      fairOddsMap.set(groupArr.indexOf(g), impliedToAmerican(noVigProb))
+    })
+  }
+
+  // Build summary structure
+  for (let i = 0; i < groupArr.length; i++) {
+    const g = groupArr[i]
+    if (!byMarket.has(g.marketType)) byMarket.set(g.marketType, [])
+
+    const bestOdds = g.prices.reduce((best, p) => (p > best ? p : best), -Infinity)
+    const avgImplied = g.prices.reduce((s, p) => s + americanToImplied(p), 0) / g.prices.length
+    const avgOdds = impliedToAmerican(avgImplied)
+
+    byMarket.get(g.marketType).push({
+      name: g.name,
+      ...(g.point != null && { point: g.point }),
+      fairOdds: fairOddsMap.get(i) ?? null,
+      bestOdds,
+      avgOdds,
+    })
+  }
+
+  const result = {}
+  for (const [marketType, outcomes] of byMarket) {
+    result[marketType] = outcomes
+  }
+  return result
+}
 
 export function filterBookmakersForOddsResponse(bookmakers = [], {
   sourceType = 'all',
@@ -57,8 +160,12 @@ export default async function oddsRoutes(fastify) {
       return reply.code(404).send(error(`Odds for event '${eventId}' not found.`, 404))
     }
 
+    // Compute summary before applying per-request book limits
+    const summary = computeOddsSummary(odds.bookmakers)
+
     odds.bookmakers = filterBookmakersForOddsResponse(odds.bookmakers, { sourceType })
     odds.bookmakers = applyBooksPerRequestLimit(odds.bookmakers, request.tierConfig.booksPerRequest)
+    odds.summary = summary
 
     return success(odds, { league: odds.leagueId, event: eventId })
   })

@@ -314,6 +314,142 @@ Get stats for a player.
 
 ---
 
+#### GET /v1/players/:playerId/hit-rates
+Get hit rates for a player against a specific prop line — how often the player has cleared the line in recent games.
+
+**Tier:** Pro+
+**Params:**
+| Param | Type | Default | Description |
+|-------|------|---------|-------------|
+| market | string | — | **Required.** Prop market key (e.g. `player_points`, `player_assists`, `player_rebounds`) |
+| line | number | — | **Required.** The prop line threshold (e.g. `14.5`) |
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "playerId": "nba-p-4065648",
+    "market": "player_points",
+    "line": 14.5,
+    "direction": "over",
+    "hitRates": {
+      "L5":     { "games": 5,  "hits": 4, "rate": 0.800 },
+      "L10":    { "games": 10, "hits": 6, "rate": 0.600 },
+      "L25":    { "games": 25, "hits": 15, "rate": 0.600 },
+      "season": { "games": 62, "hits": 37, "rate": 0.597 }
+    }
+  }
+}
+```
+
+---
+
+#### GET /v1/players/trending
+Get players sorted by hit rate, paired with their best available prop line and odds. Designed for discovery surfaces that rank players by recent performance against the market.
+
+**Tier:** Pro+
+**Params:**
+| Param | Type | Default | Description |
+|-------|------|---------|-------------|
+| league | string | — | **Required.** League ID (`nba`, `nfl`, `mlb`, `nhl`) |
+| market | string | — | **Required.** Prop market key (e.g. `player_points`) |
+| sortBy | string | `l5` | Hit-rate window to sort by: `l5`, `l10`, `l25`, or `season` |
+| direction | string | `over` | `over` or `under` |
+| limit | number | 25 | Max 50 |
+| page | number | 1 | Page number |
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "playerId": "nba-p-4065648",
+      "playerName": "Coby White",
+      "teamId": "nba-cha",
+      "position": "PG",
+      "eventId": "nba-ev-311286",
+      "market": "player_points",
+      "direction": "over",
+      "bestLine": 14.5,
+      "bestOdds": -108,
+      "bookmakerName": "DraftKings",
+      "bookmakerId": "draftkings",
+      "sourceType": "sportsbook",
+      "hitRates": {
+        "L5":     { "games": 5,  "hits": 4, "rate": 0.800 },
+        "L10":    { "games": 10, "hits": 6, "rate": 0.600 },
+        "L25":    { "games": 25, "hits": 15, "rate": 0.600 },
+        "season": { "games": 62, "hits": 37, "rate": 0.597 }
+      }
+    }
+  ],
+  "meta": { "count": 25, "total": 87, "page": 1, "pages": 4, "league": "nba", "market": "player_points", "sortBy": "l5", "direction": "over" }
+}
+```
+
+---
+
+#### GET /v1/players/:playerId/analysis
+Get an integrated analysis for a player: current best bet, game-by-game chart data, and hit rates in a single response. Designed for player detail screens.
+
+**Tier:** Pro+
+**Params:**
+| Param | Type | Default | Description |
+|-------|------|---------|-------------|
+| market | string | — | **Required.** Prop market key (e.g. `player_points`) |
+| window | string | `l5` | Time window for the chart: `l5`, `l10`, `l25`, or `season` |
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "player": {
+      "playerId": "nba-p-4065648",
+      "playerName": "Coby White",
+      "teamId": "nba-cha",
+      "leagueId": "nba",
+      "position": "PG"
+    },
+    "currentEvent": {
+      "eventId": "nba-ev-311286",
+      "homeTeamId": "nba-cha",
+      "awayTeamId": "nba-nyk",
+      "startTime": "2026-03-26T23:10:00.000Z"
+    },
+    "bestBet": {
+      "market": "player_points",
+      "line": 14.5,
+      "odds": -108,
+      "bookmakerId": "draftkings",
+      "bookmakerName": "DraftKings",
+      "sourceType": "sportsbook"
+    },
+    "hitRates": {
+      "L5":     { "games": 5, "hits": 4, "rate": 0.800 },
+      "L10":    { "games": 10, "hits": 6, "rate": 0.600 },
+      "L25":    { "games": 25, "hits": 15, "rate": 0.600 },
+      "season": { "games": 62, "hits": 37, "rate": 0.597 }
+    },
+    "chart": {
+      "window": "l5",
+      "line": 14.5,
+      "games": [
+        { "gameDate": "2026-03-14T00:00:00.000Z", "opponent": "San Antonio Spurs", "value": 18, "hit": true },
+        { "gameDate": "2026-03-17T00:00:00.000Z", "opponent": "Miami Heat", "value": 24, "hit": true },
+        { "gameDate": "2026-03-19T00:00:00.000Z", "opponent": "Orlando Magic", "value": 27, "hit": true },
+        { "gameDate": "2026-03-21T00:00:00.000Z", "opponent": "Memphis Grizzlies", "value": 12, "hit": false },
+        { "gameDate": "2026-03-24T00:00:00.000Z", "opponent": "Sacramento Kings", "value": 27, "hit": true }
+      ]
+    }
+  }
+}
+```
+
+---
+
 ### Odds & Bookmakers
 
 #### GET /v1/odds
@@ -376,13 +512,28 @@ Browse odds with filtering. Returns odds from sportsbooks, DFS platforms, and ex
 ---
 
 #### GET /v1/events/:eventId/odds
-Get odds for a specific event.
+Get odds for a specific event. Includes a `summary` object with fair odds (no-vig), best odds, and average odds per market and outcome for cross-book comparison.
 
 **Tier:** Starter+
 **Params:**
 | Param | Type | Default | Description |
 |-------|------|---------|-------------|
 | sourceType | string | `all` | `sportsbook`, `dfs`, `exchange`, or `all` |
+
+**Response includes:**
+```json
+{
+  "summary": {
+    "h2h": [
+      { "name": "Charlotte Hornets", "fairOdds": -109.7, "bestOdds": -113, "avgOdds": -118.8 },
+      { "name": "New York Knicks",   "fairOdds": 109.7,  "bestOdds": 115,  "avgOdds": 102 }
+    ],
+    "spreads": [ ... ],
+    "totals": [ ... ]
+  },
+  "bookmakers": [ ... ]
+}
+```
 
 ---
 
@@ -485,7 +636,7 @@ Browse player props grouped by event, player, market, and line.
 ---
 
 #### GET /v1/events/:eventId/player-props
-Get player props for a specific event using the same `eventId` returned by the Events and Odds endpoints.
+Get player props for a specific event using the same `eventId` returned by the Events and Odds endpoints. Each line entry includes a `summary` with fair odds, best odds, and average odds per selection (over/under) for easy cross-book comparison.
 
 **Tier:** Starter+
 **Params:**
@@ -496,6 +647,18 @@ Get player props for a specific event using the same `eventId` returned by the E
 | playerId | string | — | Exact internal player ID |
 | bookmaker | string | — | Filter by bookmaker key or name |
 | sourceType | string | `all` | `sportsbook`, `dfs`, `exchange`, or `all` |
+
+**Line summary example:**
+```json
+{
+  "point": 14.5,
+  "summary": {
+    "over":  { "fairOdds": 103,   "bestOdds": -108, "avgOdds": -114.3 },
+    "under": { "fairOdds": -103,  "bestOdds": -110, "avgOdds": -121.8 }
+  },
+  "offers": [ ... ]
+}
+```
 
 ---
 
@@ -809,6 +972,27 @@ curl -H "x-api-key: ml_live_YOUR_KEY" \
   "https://mlapi.bet/v1/players/nba-p-12345/stats?type=season"
 ```
 
+### Get trending players by hit rate (Pro+)
+
+```bash
+curl -H "x-api-key: ml_live_YOUR_KEY" \
+  "https://mlapi.bet/v1/players/trending?league=nba&market=player_points&sortBy=l5"
+```
+
+### Get hit rates for a player against a line (Pro+)
+
+```bash
+curl -H "x-api-key: ml_live_YOUR_KEY" \
+  "https://mlapi.bet/v1/players/nba-p-12345/hit-rates?market=player_points&line=14.5"
+```
+
+### Get integrated player analysis with chart data (Pro+)
+
+```bash
+curl -H "x-api-key: ml_live_YOUR_KEY" \
+  "https://mlapi.bet/v1/players/nba-p-12345/analysis?market=player_points&window=l5"
+```
+
 ---
 
 ## Endpoint Summary
@@ -833,6 +1017,9 @@ curl -H "x-api-key: ml_live_YOUR_KEY" \
 | GET | /v1/teams/:teamId/schedule | Free | Team schedule |
 | GET | /v1/players/:playerId | Free | Player details |
 | GET | /v1/players/:playerId/stats | Free | Player stats by season, exact event, or game/date range |
+| GET | /v1/players/:playerId/hit-rates | Pro | Hit rates (L5/L10/L25/season) against a prop line |
+| GET | /v1/players/:playerId/analysis | Pro | Integrated player detail: best bet + chart data + hit rates |
+| GET | /v1/players/trending | Pro | Players sorted by hit rate with best available line |
 | GET | /v1/odds | Starter | Browse odds |
 | GET | /v1/events/:eventId/odds | Starter | Event odds |
 | GET | /v1/odds/bookmakers | Starter | List bookmakers |

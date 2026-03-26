@@ -141,6 +141,44 @@ export const API_ENDPOINTS = [
     tier: 'pro',
   },
 
+  // ── Player Analysis ────────────────────────────────────────
+  {
+    id: 'players_trending',
+    category: 'Player Analysis',
+    label: 'Trending Players',
+    method: 'GET',
+    path: '/v1/players/trending?league=nba&market=player_points&sortBy=l5',
+    healthPath: '/v1/players/trending?league=nba&market=player_points&sortBy=l5',
+    tier: 'pro',
+  },
+  {
+    id: 'players_trending_nhl',
+    category: 'Player Analysis',
+    label: 'Trending Players (NHL)',
+    method: 'GET',
+    path: '/v1/players/trending?league=nhl&market=player_shots_on_goal&sortBy=l5',
+    healthPath: '/v1/players/trending?league=nhl&market=player_shots_on_goal&sortBy=l5',
+    tier: 'pro',
+  },
+  {
+    id: 'players_hit_rates',
+    category: 'Player Analysis',
+    label: 'Player Hit Rates',
+    method: 'GET',
+    path: '/v1/players/{playerId}/hit-rates?market=player_points&line=14.5',
+    healthPath: null,
+    tier: 'pro',
+  },
+  {
+    id: 'players_analysis',
+    category: 'Player Analysis',
+    label: 'Player Analysis',
+    method: 'GET',
+    path: '/v1/players/{playerId}/analysis?market=player_points&window=l5',
+    healthPath: null,
+    tier: 'pro',
+  },
+
   // ── Best Bets ──────────────────────────────────────────────
   {
     id: 'best_bets',

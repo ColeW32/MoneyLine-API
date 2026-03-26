@@ -113,6 +113,15 @@ async function createIndexes() {
   await db.collection('billing_events').createIndex({ userId: 1, createdAt: -1 })
   console.log('  - billing_events indexes created')
 
+  // hit_rates
+  await db.collection('hit_rates').createIndex(
+    { playerId: 1, leagueId: 1, market: 1, line: 1 },
+    { unique: true }
+  )
+  await db.collection('hit_rates').createIndex({ playerId: 1, market: 1 })
+  await db.collection('hit_rates').createIndex({ leagueId: 1, market: 1, calculatedAt: -1 })
+  console.log('  - hit_rates indexes created')
+
   console.log('[indexes] All indexes created successfully.')
   await closeDB()
 }

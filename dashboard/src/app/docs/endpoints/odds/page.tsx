@@ -92,7 +92,7 @@ export default function OddsEndpointsPage() {
       <EndpointCard
         method="GET"
         path="/v1/events/:eventId/odds"
-        description="Get odds for a specific event. The number of bookmakers returned depends on your tier."
+        description="Get odds for a specific event. Includes a summary object with fair (no-vig), best, and average odds computed across all bookmakers. The number of bookmakers returned depends on your tier."
         tier="starter"
         params={[
           {
@@ -108,7 +108,46 @@ export default function OddsEndpointsPage() {
             description: 'all, sportsbook, dfs, exchange',
           },
         ]}
+        response={`{
+  "success": true,
+  "data": {
+    "eventId": "nba-ev-311286",
+    "summary": {
+      "h2h": [
+        { "name": "Boston Celtics", "fairOdds": -172, "bestOdds": -165, "avgOdds": -175 },
+        { "name": "Los Angeles Lakers", "fairOdds": 148, "bestOdds": 155, "avgOdds": 145 }
+      ],
+      "spreads": [
+        { "name": "Boston Celtics", "point": -4.5, "fairOdds": -108, "bestOdds": -105, "avgOdds": -110 },
+        { "name": "Los Angeles Lakers", "point": 4.5, "fairOdds": -104, "bestOdds": -102, "avgOdds": -108 }
+      ],
+      "totals": [
+        { "name": "Over", "point": 220.5, "fairOdds": -106, "bestOdds": -104, "avgOdds": -110 },
+        { "name": "Under", "point": 220.5, "fairOdds": -106, "bestOdds": -105, "avgOdds": -108 }
+      ]
+    },
+    "bookmakers": [
+      {
+        "key": "draftkings",
+        "name": "DraftKings",
+        "markets": [
+          { "type": "h2h", "outcomes": [{ "name": "Boston Celtics", "price": -175 }, { "name": "Los Angeles Lakers", "price": 150 }] }
+        ]
+      }
+    ]
+  }
+}`}
       />
+
+      <div className="mt-5 rounded-lg border border-[#e0e0e0] bg-[#f5f2eb]/50 px-4 py-3">
+        <p className="text-[13px] font-semibold text-[#1a1a1a]">Summary field</p>
+        <ul className="mt-2 list-disc pl-5 space-y-1 text-[13px] leading-relaxed text-[#4a4a4a]">
+          <li><strong>fairOdds</strong> — No-vig price: implied probabilities from all books are averaged, then normalized so the binary pair sums to 1.0, then converted back to American odds.</li>
+          <li><strong>bestOdds</strong> — The highest American odds offered by any single bookmaker for that outcome.</li>
+          <li><strong>avgOdds</strong> — Simple average of implied probabilities across all books, converted to American odds.</li>
+          <li>Summary is computed from <em>all</em> bookmaker data before any tier-based bookmaker filtering is applied.</li>
+        </ul>
+      </div>
 
       <h2 className="text-xl font-semibold text-[#1a1a1a] mt-10 mb-1">Bookmakers</h2>
       <EndpointCard

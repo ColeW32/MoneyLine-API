@@ -1,6 +1,7 @@
 import { getCollection } from '../db.js'
-import { getCurrentSeason } from '../config/sports.js'
+import { getCurrentSeason, SPORTS } from '../config/sports.js'
 import { success, error } from '../utils/response.js'
+import { computeHitRates, getStatFields } from '../ingestion/hitRateCalculator.js'
 
 function parseDateBoundary(value, endOfDay = false) {
   if (!value) return null
@@ -10,6 +11,57 @@ function parseDateBoundary(value, endOfDay = false) {
 
   const parsed = new Date(value)
   return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
+/**
+ * Compute hit rates for a player against a line.
+ * First checks the hit_rates cache (valid for 1 hour), falls back to live computation.
+ */
+async function resolveHitRates(playerId, leagueId, market, line) {
+  const ONE_HOUR_AGO = new Date(Date.now() - 60 * 60 * 1000)
+
+  // Check cache
+  const cached = await getCollection('hit_rates').findOne(
+    { playerId, leagueId, market, line },
+    { projection: { _id: 0, L5: 1, L10: 1, L25: 1, season: 1, calculatedAt: 1 } }
+  )
+
+  if (cached && cached.calculatedAt > ONE_HOUR_AGO) {
+    return { L5: cached.L5, L10: cached.L10, L25: cached.L25, season: cached.season }
+  }
+
+  // Compute on the fly
+  const fields = getStatFields(leagueId, market)
+  if (!fields) return null
+
+  const currentSeason = getCurrentSeason(leagueId)
+  const games = await getCollection('player_stats')
+    .find(
+      { playerId, statType: 'game' },
+      { projection: { _id: 0, season: 1, gameDate: 1, stats: 1 } }
+    )
+    .sort({ gameDate: -1 })
+    .limit(200)
+    .toArray()
+
+  if (games.length === 0) return null
+
+  const rates = computeHitRates(games, fields, line, 'over', currentSeason)
+
+  // Cache the result
+  await getCollection('hit_rates').updateOne(
+    { playerId, leagueId, market, line },
+    {
+      $set: {
+        playerId, leagueId, market, line, direction: 'over',
+        L5: rates.L5, L10: rates.L10, L25: rates.L25, season: rates.season,
+        calculatedAt: new Date(),
+      },
+    },
+    { upsert: true }
+  )
+
+  return rates
 }
 
 export default async function playerRoutes(fastify) {
@@ -121,4 +173,414 @@ export default async function playerRoutes(fastify) {
       ...(filter.eventId && { eventId: filter.eventId }),
     })
   })
+
+  // GET /v1/players/:playerId/hit-rates
+  // Returns hit rates (L5/L10/L25/season) for a player against a specific prop line.
+  // Query params: market (required), line (required)
+  fastify.get('/v1/players/:playerId/hit-rates', async (request, reply) => {
+    const { playerId } = request.params
+    const { market, line } = request.query
+
+    if (!market) {
+      return reply.code(400).send(error('Query param "market" is required (e.g. player_points).', 400))
+    }
+    if (line == null || line === '') {
+      return reply.code(400).send(error('Query param "line" is required (e.g. 14.5).', 400))
+    }
+
+    const lineNum = parseFloat(line)
+    if (!Number.isFinite(lineNum)) {
+      return reply.code(400).send(error('Query param "line" must be a number.', 400))
+    }
+
+    const player = await getCollection('players').findOne(
+      { playerId },
+      { projection: { _id: 0, playerId: 1, leagueId: 1 } }
+    )
+
+    if (!player) {
+      return reply.code(404).send(error(`Player '${playerId}' not found.`, 404))
+    }
+
+    const fields = getStatFields(player.leagueId, market)
+    if (!fields) {
+      return reply.code(400).send(
+        error(`Market '${market}' is not supported for hit-rate calculation in ${player.leagueId}.`, 400)
+      )
+    }
+
+    const rates = await resolveHitRates(playerId, player.leagueId, market, lineNum)
+
+    if (!rates) {
+      return reply.code(404).send(
+        error(`No game stats found for player '${playerId}'. Cannot compute hit rates.`, 404)
+      )
+    }
+
+    return success(
+      { playerId, market, line: lineNum, direction: 'over', hitRates: rates },
+      { league: player.leagueId }
+    )
+  })
+
+  // GET /v1/players/trending
+  // Returns players sorted by hit rate for a given league + market.
+  // Query params: league (required), market (required), sortBy (l5|l10|l25|season, default l5),
+  //               direction (over|under, default over), limit, page
+  fastify.get('/v1/players/trending', async (request, reply) => {
+    const { league, market, sortBy = 'l5', direction = 'over', limit, page } = request.query
+
+    if (!league) {
+      return reply.code(400).send(error('Query param "league" is required.', 400))
+    }
+    if (!SPORTS[league]) {
+      return reply.code(400).send(error(`Unknown league '${league}'.`, 400))
+    }
+    if (!market) {
+      return reply.code(400).send(error('Query param "market" is required (e.g. player_points).', 400))
+    }
+    if (!['l5', 'l10', 'l25', 'season'].includes(sortBy.toLowerCase())) {
+      return reply.code(400).send(error('sortBy must be one of: l5, l10, l25, season.', 400))
+    }
+
+    const fields = getStatFields(league, market)
+    if (!fields) {
+      return reply.code(400).send(
+        error(`Market '${market}' is not supported for hit-rate calculation in ${league}.`, 400)
+      )
+    }
+
+    const pageNum = Math.max(1, parseInt(page) || 1)
+    const pageSize = Math.min(50, Math.max(1, parseInt(limit) || 25))
+
+    // Get today's player props for this league + market
+    const now = new Date()
+    const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    const dayEnd = new Date(dayStart.getTime() + 86_400_000)
+
+    const events = await getCollection('events')
+      .find(
+        { leagueId: league, startTime: { $gte: dayStart, $lt: dayEnd } },
+        { projection: { _id: 0, eventId: 1 } }
+      )
+      .toArray()
+
+    if (events.length === 0) {
+      return success([], { count: 0, page: pageNum, league, market })
+    }
+
+    const eventIds = events.map((e) => e.eventId)
+
+    const propDocs = await getCollection('player_props')
+      .find(
+        { eventId: { $in: eventIds }, marketTypes: market },
+        { projection: { _id: 0, eventId: 1, players: 1 } }
+      )
+      .toArray()
+
+    if (propDocs.length === 0) {
+      return success([], { count: 0, page: pageNum, league, market })
+    }
+
+    // Build a flat list of players with their best offer for this market
+    // Key by playerId to deduplicate across events
+    const playerMap = new Map()
+
+    for (const doc of propDocs) {
+      for (const player of doc.players || []) {
+        if (!player.playerId) continue
+
+        const marketEntry = (player.markets || []).find((m) => m.marketType === market)
+        if (!marketEntry?.lines?.length) continue
+
+        // Find the best line + best odds (highest price) for the direction
+        let bestEntry = null
+        for (const lineEntry of marketEntry.lines) {
+          if (lineEntry.point == null) continue
+          const selectionName = direction === 'over' ? 'over' : 'under'
+          const matchingOffers = (lineEntry.offers || []).filter(
+            (o) => String(o.selection || '').toLowerCase() === selectionName
+          )
+          if (matchingOffers.length === 0) continue
+
+          const bestOffer = matchingOffers.reduce((a, b) => (b.price > a.price ? b : a))
+          if (!bestEntry || bestOffer.price > bestEntry.bestOdds) {
+            bestEntry = {
+              line: lineEntry.point,
+              bestOdds: bestOffer.price,
+              bookmakerId: bestOffer.bookmakerId,
+              bookmakerName: bestOffer.bookmakerName,
+              sourceType: bestOffer.sourceType,
+            }
+          }
+        }
+
+        if (!bestEntry) continue
+
+        if (!playerMap.has(player.playerId)) {
+          playerMap.set(player.playerId, {
+            playerId: player.playerId,
+            playerName: player.playerName,
+            eventId: doc.eventId,
+            bestLine: bestEntry.line,
+            bestOdds: bestEntry.bestOdds,
+            bookmakerId: bestEntry.bookmakerId,
+            bookmakerName: bestEntry.bookmakerName,
+            sourceType: bestEntry.sourceType,
+          })
+        }
+      }
+    }
+
+    if (playerMap.size === 0) {
+      return success([], { count: 0, page: pageNum, league, market })
+    }
+
+    // Fetch player metadata (team)
+    const playerIds = [...playerMap.keys()]
+    const playerDocs = await getCollection('players')
+      .find(
+        { playerId: { $in: playerIds } },
+        { projection: { _id: 0, playerId: 1, playerName: 1, teamId: 1, position: 1 } }
+      )
+      .toArray()
+
+    const playerMeta = new Map(playerDocs.map((p) => [p.playerId, p]))
+
+    // Fetch pre-computed hit rates for all (playerId, market, line) combos
+    const hitRateFilter = playerIds.map((pid) => {
+      const entry = playerMap.get(pid)
+      return { playerId: pid, market, line: entry.bestLine }
+    })
+
+    const hitRateDocs = await getCollection('hit_rates')
+      .find(
+        { $or: hitRateFilter },
+        { projection: { _id: 0, playerId: 1, line: 1, L5: 1, L10: 1, L25: 1, season: 1 } }
+      )
+      .toArray()
+
+    const hitRateMap = new Map(
+      hitRateDocs.map((h) => [`${h.playerId}:${h.line}`, h])
+    )
+
+    // Assemble results
+    const sortKey = sortBy.toUpperCase()
+    const results = []
+
+    for (const [pid, entry] of playerMap) {
+      const meta = playerMeta.get(pid) || {}
+      const hrKey = `${pid}:${entry.bestLine}`
+      const hr = hitRateMap.get(hrKey)
+
+      const sortRate = hr?.[sortKey]?.rate ?? null
+
+      results.push({
+        playerId: pid,
+        playerName: entry.playerName || meta.playerName,
+        teamId: meta.teamId || null,
+        position: meta.position || null,
+        eventId: entry.eventId,
+        market,
+        direction,
+        bestLine: entry.bestLine,
+        bestOdds: entry.bestOdds,
+        bookmakerName: entry.bookmakerName,
+        bookmakerId: entry.bookmakerId,
+        sourceType: entry.sourceType,
+        hitRates: hr
+          ? {
+              L5: hr.L5 ? { games: hr.L5.games, hits: hr.L5.hits, rate: hr.L5.rate } : null,
+              L10: hr.L10 ? { games: hr.L10.games, hits: hr.L10.hits, rate: hr.L10.rate } : null,
+              L25: hr.L25 ? { games: hr.L25.games, hits: hr.L25.hits, rate: hr.L25.rate } : null,
+              season: hr.season ? { games: hr.season.games, hits: hr.season.hits, rate: hr.season.rate } : null,
+            }
+          : null,
+        _sortRate: sortRate,
+      })
+    }
+
+    // Sort by hit rate descending (nulls last)
+    results.sort((a, b) => {
+      if (a._sortRate === null && b._sortRate === null) return 0
+      if (a._sortRate === null) return 1
+      if (b._sortRate === null) return -1
+      return b._sortRate - a._sortRate
+    })
+
+    // Paginate
+    const total = results.length
+    const paginated = results
+      .slice((pageNum - 1) * pageSize, pageNum * pageSize)
+      .map(({ _sortRate, ...rest }) => rest) // remove internal sort field
+
+    return success(paginated, {
+      count: paginated.length,
+      total,
+      page: pageNum,
+      pages: Math.ceil(total / pageSize),
+      league,
+      market,
+      sortBy,
+      direction,
+    })
+  })
+
+  // GET /v1/players/:playerId/analysis
+  // Returns integrated player data: best bet + game chart data + hit rates.
+  // Query params: market (required), window (l5|l10|l25|season, default l5)
+  fastify.get('/v1/players/:playerId/analysis', async (request, reply) => {
+    const { playerId } = request.params
+    const { market, window: windowParam = 'l5' } = request.query
+
+    if (!market) {
+      return reply.code(400).send(error('Query param "market" is required (e.g. player_points).', 400))
+    }
+
+    const validWindows = { l5: 5, l10: 10, l25: 25, season: null }
+    const windowKey = windowParam.toLowerCase()
+    if (!(windowKey in validWindows)) {
+      return reply.code(400).send(error('window must be one of: l5, l10, l25, season.', 400))
+    }
+
+    const player = await getCollection('players').findOne(
+      { playerId },
+      { projection: { _id: 0 } }
+    )
+
+    if (!player) {
+      return reply.code(404).send(error(`Player '${playerId}' not found.`, 404))
+    }
+
+    const { leagueId } = player
+    const fields = getStatFields(leagueId, market)
+    const currentSeason = getCurrentSeason(leagueId)
+
+    // Fetch game stats for chart + hit rate computation
+    const gameStats = await getCollection('player_stats')
+      .find(
+        { playerId, statType: 'game' },
+        { projection: { _id: 0, season: 1, gameDate: 1, opponent: 1, homeAway: 1, result: 1, stats: 1 } }
+      )
+      .sort({ gameDate: -1 })
+      .limit(200)
+      .toArray()
+
+    // Find today's event for this player's team (for context)
+    const now = new Date()
+    const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    const dayEnd = new Date(dayStart.getTime() + 86_400_000)
+
+    // Find today's event IDs for this league first, then run parallel queries
+    const todayEventIds = await getCollection('events')
+      .find(
+        { leagueId, startTime: { $gte: dayStart, $lt: dayEnd } },
+        { projection: { _id: 0, eventId: 1 } }
+      )
+      .toArray()
+      .then((evs) => evs.map((e) => e.eventId))
+
+    const [currentEvent, propDocs] = await Promise.all([
+      getCollection('events').findOne(
+        {
+          leagueId,
+          startTime: { $gte: dayStart, $lt: dayEnd },
+          $or: [{ homeTeamId: player.teamId }, { awayTeamId: player.teamId }],
+        },
+        { projection: { _id: 0, eventId: 1, homeTeamId: 1, awayTeamId: 1, homeTeamName: 1, awayTeamName: 1, startTime: 1 } }
+      ),
+      getCollection('player_props')
+        .find(
+          { playerIds: playerId, eventId: { $in: todayEventIds } },
+          { projection: { _id: 0, players: 1 } }
+        )
+        .toArray(),
+    ])
+
+    // Find best bet for this player + market across all today's prop docs
+    let bestBet = null
+    for (const doc of propDocs) {
+      const playerEntry = (doc.players || []).find((p) => p.playerId === playerId)
+      if (!playerEntry) continue
+
+      const marketEntry = (playerEntry.markets || []).find((m) => m.marketType === market)
+      if (!marketEntry?.lines?.length) continue
+
+      for (const lineEntry of marketEntry.lines) {
+        if (lineEntry.point == null) continue
+        const overOffers = (lineEntry.offers || []).filter(
+          (o) => String(o.selection || '').toLowerCase() === 'over'
+        )
+        if (overOffers.length === 0) continue
+        const best = overOffers.reduce((a, b) => (b.price > a.price ? b : a))
+        if (!bestBet || best.price > bestBet.odds) {
+          bestBet = {
+            market,
+            line: lineEntry.point,
+            odds: best.price,
+            bookmakerId: best.bookmakerId,
+            bookmakerName: best.bookmakerName,
+            sourceType: best.sourceType,
+          }
+        }
+      }
+    }
+
+    // Compute hit rates
+    let hitRates = null
+    if (fields && bestBet) {
+      hitRates = await resolveHitRates(playerId, leagueId, market, bestBet.line)
+    }
+
+    // Build chart data (game-by-game values for the selected window)
+    const windowSize = validWindows[windowKey]
+    const chartGames = windowKey === 'season'
+      ? gameStats.filter((g) => g.season === currentSeason)
+      : gameStats.slice(0, windowSize)
+
+    const chartData = chartGames
+      .slice()
+      .reverse() // chronological order for chart
+      .map((g) => {
+        const val = fields ? sumStatFieldsForChart(g.stats, fields) : null
+        return {
+          gameDate: g.gameDate,
+          opponent: g.opponent,
+          homeAway: g.homeAway,
+          result: g.result,
+          value: val,
+          hit: bestBet && val !== null ? val > bestBet.line : null,
+        }
+      })
+
+    return success(
+      {
+        player,
+        currentEvent: currentEvent || null,
+        bestBet,
+        hitRates,
+        chart: {
+          window: windowKey,
+          line: bestBet?.line ?? null,
+          games: chartData,
+        },
+      },
+      { league: leagueId, market }
+    )
+  })
+}
+
+// Inline helper so the analysis handler can compute stat values for chart display
+function sumStatFieldsForChart(stats, fields) {
+  if (!stats || !fields?.length) return null
+  let total = 0
+  let found = false
+  for (const field of fields) {
+    const val = stats[field]
+    if (typeof val === 'number' && Number.isFinite(val)) {
+      total += val
+      found = true
+    }
+  }
+  return found ? total : null
 }

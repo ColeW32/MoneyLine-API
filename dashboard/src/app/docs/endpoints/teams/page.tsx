@@ -198,6 +198,110 @@ export default function TeamsPlayersPage() {
           <li><code className="text-[12px] bg-[#f0ede6] px-1 py-0.5 rounded font-mono">type=career</code> is not supported in this version.</li>
         </ul>
       </div>
+
+      {/* ---- Player Analysis ---- */}
+      <h2 className="text-xl font-semibold text-[#1a1a1a] mt-10 mb-1">Player Analysis</h2>
+
+      <p className="text-[15px] text-[#4a4a4a] leading-relaxed mt-2 mb-4 max-w-2xl">
+        These endpoints combine historical game stats with live betting data to surface hit rates,
+        trending players, and integrated player analysis views.
+      </p>
+
+      <EndpointCard
+        method="GET"
+        path="/v1/players/trending"
+        description="Get players sorted by hit rate, paired with their best available prop line and odds. Designed for discovery surfaces."
+        tier="pro"
+        params={[
+          { name: 'league', type: 'string', required: true, description: 'League ID (nba, nfl, mlb, nhl)' },
+          { name: 'market', type: 'string', required: true, description: 'Prop market key (e.g. player_points)' },
+          { name: 'sortBy', type: 'string', required: false, description: 'Hit-rate window to sort by: l5, l10, l25, season. Default l5' },
+          { name: 'direction', type: 'string', required: false, description: 'over or under. Default over' },
+          { name: 'limit', type: 'number', required: false, description: 'Max 50, default 25' },
+          { name: 'page', type: 'number', required: false, description: 'Page number for pagination' },
+        ]}
+        response={`{
+  "success": true,
+  "data": [
+    {
+      "playerId": "nba-p-4065648",
+      "playerName": "Coby White",
+      "teamId": "nba-cha",
+      "position": "PG",
+      "market": "player_points",
+      "bestLine": 14.5,
+      "bestOdds": -108,
+      "bookmakerName": "DraftKings",
+      "hitRates": {
+        "L5":  { "games": 5, "hits": 4, "rate": 0.800 },
+        "L10": { "games": 10, "hits": 6, "rate": 0.600 },
+        "L25": { "games": 25, "hits": 15, "rate": 0.600 }
+      }
+    }
+  ],
+  "meta": { "count": 25, "total": 87, "page": 1, "league": "nba", "market": "player_points" }
+}`}
+      />
+
+      <EndpointCard
+        method="GET"
+        path="/v1/players/:playerId/hit-rates"
+        description="Get hit rates (L5, L10, L25, season) for a player against a specific prop line."
+        tier="pro"
+        params={[
+          { name: 'playerId', type: 'string', required: true, description: 'The unique identifier of the player.' },
+          { name: 'market', type: 'string', required: true, description: 'Prop market key (e.g. player_points)' },
+          { name: 'line', type: 'number', required: true, description: 'The prop line threshold (e.g. 14.5)' },
+        ]}
+        response={`{
+  "success": true,
+  "data": {
+    "playerId": "nba-p-4065648",
+    "market": "player_points",
+    "line": 14.5,
+    "direction": "over",
+    "hitRates": {
+      "L5":     { "games": 5, "hits": 4, "rate": 0.800 },
+      "L10":    { "games": 10, "hits": 6, "rate": 0.600 },
+      "L25":    { "games": 25, "hits": 15, "rate": 0.600 },
+      "season": { "games": 62, "hits": 37, "rate": 0.597 }
+    }
+  }
+}`}
+      />
+
+      <EndpointCard
+        method="GET"
+        path="/v1/players/:playerId/analysis"
+        description="Integrated player analysis: current best bet, game-by-game chart data, and hit rates in one response."
+        tier="pro"
+        params={[
+          { name: 'playerId', type: 'string', required: true, description: 'The unique identifier of the player.' },
+          { name: 'market', type: 'string', required: true, description: 'Prop market key (e.g. player_points)' },
+          { name: 'window', type: 'string', required: false, description: 'Time window for chart data: l5, l10, l25, season. Default l5' },
+        ]}
+        response={`{
+  "success": true,
+  "data": {
+    "player": { "playerId": "nba-p-4065648", "playerName": "Coby White", "teamId": "nba-cha" },
+    "currentEvent": { "eventId": "nba-ev-311286", "startTime": "2026-03-26T23:10:00Z" },
+    "bestBet": { "market": "player_points", "line": 14.5, "odds": -108, "bookmakerName": "DraftKings" },
+    "hitRates": {
+      "L5": { "games": 5, "hits": 4, "rate": 0.800 },
+      "L10": { "games": 10, "hits": 6, "rate": 0.600 }
+    },
+    "chart": {
+      "window": "l5",
+      "line": 14.5,
+      "games": [
+        { "gameDate": "2026-03-14T00:00:00Z", "opponent": "SAS", "value": 18, "hit": true },
+        { "gameDate": "2026-03-17T00:00:00Z", "opponent": "MIA", "value": 24, "hit": true },
+        { "gameDate": "2026-03-21T00:00:00Z", "opponent": "MEM", "value": 12, "hit": false }
+      ]
+    }
+  }
+}`}
+      />
     </div>
   )
 }

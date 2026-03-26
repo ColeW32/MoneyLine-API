@@ -162,6 +162,9 @@ async function main() {
   const playerProps = await request(baseUrl, `/v1/player-props?league=${league}&market=player_points&sourceType=all&limit=5`, { key })
   failed = !printResult('GET /v1/player-props?market=player_points', playerProps, { showBody }) || failed
 
+  const trendingPlayers = await request(baseUrl, `/v1/players/trending?league=${league}&market=player_points&sortBy=l5&limit=10`, { key })
+  printResult('GET /v1/players/trending', trendingPlayers, { allowFailure: true, showBody })
+
   if (eventId) {
     const eventOddsAll = await request(baseUrl, `/v1/events/${eventId}/odds?sourceType=all`, { key })
     failed = !printResult(`GET /v1/events/${eventId}/odds?sourceType=all`, eventOddsAll, { showBody }) || failed
@@ -179,6 +182,17 @@ async function main() {
     printResult(`GET /v1/events/${eventId}/edge?sourceType=all`, eventEdge, { allowFailure: true, showBody })
   } else {
     console.log(`${color('WARN', YELLOW)} no eventId discovered; skipping event-specific checks`)
+  }
+
+  const bestBets = await request(baseUrl, `/v1/best-bets?league=${league}&limit=5`, { key })
+  failed = !printResult('GET /v1/best-bets', bestBets, { showBody }) || failed
+
+  const bestBetsDk = await request(baseUrl, `/v1/best-bets?league=${league}&bookmaker=draftkings&limit=5`, { key })
+  failed = !printResult('GET /v1/best-bets?bookmaker=draftkings', bestBetsDk, { showBody }) || failed
+
+  if (eventId) {
+    const eventBestBets = await request(baseUrl, `/v1/events/${eventId}/best-bets`, { key, expectedStatus: 200 })
+    printResult(`GET /v1/events/${eventId}/best-bets`, eventBestBets, { allowFailure: true, showBody })
   }
 
   const edgeAll = await request(baseUrl, `/v1/edge?league=${league}&sourceType=all&limit=10`, { key })
