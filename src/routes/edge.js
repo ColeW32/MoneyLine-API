@@ -50,64 +50,56 @@ export default async function edgeRoutes(fastify) {
     const pageNum = Math.max(1, parseInt(page) || 1)
     const pageSize = Math.min(50, Math.max(1, parseInt(limit) || 25))
 
-    // Use aggregation: unwind edges, filter, then re-group per event
+    // Build a $filter condition for edges based on query params
+    const conditions = []
+    if (type) conditions.push({ $eq: ['$$e.type', type] })
+    if (sourceType && sourceType !== 'all') {
+      conditions.push({
+        $or: [
+          { $and: [{ $eq: ['$$e.type', 'arbitrage'] }, { $eq: ['$$e.venueType', sourceType] }] },
+          { $and: [{ $ne: ['$$e.type', 'arbitrage'] }, { $eq: ['$$e.sourceType', sourceType] }] },
+        ],
+      })
+    }
+    if (minProfit) {
+      const min = parseFloat(minProfit)
+      conditions.push({
+        $or: [
+          { $ne: ['$$e.type', 'arbitrage'] },
+          { $gte: ['$$e.arbitrage.profitPct', min] },
+        ],
+      })
+    }
+    if (minEdge) {
+      const min = parseFloat(minEdge)
+      conditions.push({
+        $or: [
+          { $ne: ['$$e.type', 'value'] },
+          { $gte: ['$$e.valueBet.edgePct', min] },
+        ],
+      })
+    }
+
+    const edgeFilter = conditions.length > 0
+      ? { $and: conditions }
+      : true // no filtering, keep all edges
+
     const pipeline = [
       { $match: filter },
       { $sort: { calculatedAt: -1 } },
       { $skip: (pageNum - 1) * pageSize },
       { $limit: pageSize },
-      { $unwind: '$edges' },
-      { $project: { _id: 0, eventId: 1, leagueId: 1, sport: 1, calculatedAt: 1, edge: '$edges' } },
+      { $project: {
+        _id: 0, eventId: 1, leagueId: 1, sport: 1, calculatedAt: 1,
+        edges: {
+          $slice: [
+            { $filter: { input: '$edges', as: 'e', cond: edgeFilter } },
+            50,
+          ],
+        },
+      }},
+      { $match: { 'edges.0': { $exists: true } } },
     ]
-
-    // Filter by edge type
-    if (type) {
-      pipeline.push({ $match: { 'edge.type': type } })
-    }
-
-    // Filter by sourceType
-    const stMatch = buildSourceTypeMatch(sourceType)
-    if (stMatch) pipeline.push({ $match: stMatch })
-
-    // Filter by minProfit (arbitrage)
-    if (minProfit) {
-      const min = parseFloat(minProfit)
-      pipeline.push({
-        $match: {
-          $or: [
-            { 'edge.type': { $ne: 'arbitrage' } },
-            { 'edge.arbitrage.profitPct': { $gte: min } },
-          ],
-        },
-      })
-    }
-
-    // Filter by minEdge (value)
-    if (minEdge) {
-      const min = parseFloat(minEdge)
-      pipeline.push({
-        $match: {
-          $or: [
-            { 'edge.type': { $ne: 'value' } },
-            { 'edge.valueBet.edgePct': { $gte: min } },
-          ],
-        },
-      })
-    }
-
-    // Re-group back into event documents
-    pipeline.push({
-      $group: {
-        _id: '$eventId',
-        eventId: { $first: '$eventId' },
-        leagueId: { $first: '$leagueId' },
-        sport: { $first: '$sport' },
-        calculatedAt: { $first: '$calculatedAt' },
-        edges: { $push: '$edge' },
-      },
-    })
-    pipeline.push({ $project: { _id: 0 } })
-    pipeline.push({ $sort: { calculatedAt: -1 } })
 
     const docs = await getCollection('edge_data').aggregate(pipeline).toArray()
 
@@ -239,34 +231,32 @@ export default async function edgeRoutes(fastify) {
     const { eventId } = request.params
     const { sourceType = 'all' } = request.query
 
-    // Use aggregation to limit transferred data. Unwind + regroup to
-    // apply sourceType filter server-side.
-    const pipeline = [
+    // Build sourceType filter condition for $filter
+    let edgeFilter = true
+    if (sourceType && sourceType !== 'all') {
+      edgeFilter = {
+        $or: [
+          { $and: [{ $eq: ['$$e.type', 'arbitrage'] }, { $eq: ['$$e.venueType', sourceType] }] },
+          { $and: [{ $ne: ['$$e.type', 'arbitrage'] }, { $eq: ['$$e.sourceType', sourceType] }] },
+        ],
+      }
+    }
+
+    const docs = await getCollection('edge_data').aggregate([
       { $match: { eventId } },
       { $sort: { calculatedAt: -1 } },
       { $limit: 1 },
-      { $unwind: '$edges' },
       { $project: {
-        _id: 0, eventId: 1, leagueId: 1, sport: 1, calculatedAt: 1, edge: '$edges',
+        _id: 0, eventId: 1, leagueId: 1, sport: 1, calculatedAt: 1,
+        edges: {
+          $slice: [
+            { $filter: { input: '$edges', as: 'e', cond: edgeFilter } },
+            100,
+          ],
+        },
       }},
-    ]
+    ]).toArray()
 
-    const stMatch = buildSourceTypeMatch(sourceType)
-    if (stMatch) pipeline.push({ $match: stMatch })
-
-    pipeline.push({
-      $group: {
-        _id: '$eventId',
-        eventId: { $first: '$eventId' },
-        leagueId: { $first: '$leagueId' },
-        sport: { $first: '$sport' },
-        calculatedAt: { $first: '$calculatedAt' },
-        edges: { $push: '$edge' },
-      },
-    })
-    pipeline.push({ $project: { _id: 0 } })
-
-    const docs = await getCollection('edge_data').aggregate(pipeline).toArray()
     const doc = docs[0] || null
 
     if (!doc) {
