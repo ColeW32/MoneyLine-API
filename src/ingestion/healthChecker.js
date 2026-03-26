@@ -19,6 +19,17 @@ async function checkEndpoint(endpoint) {
     }
   }
 
+  if (!endpoint.healthPath) {
+    return {
+      endpointId: endpoint.id,
+      status: 'skip',
+      statusCode: null,
+      responseTimeMs: 0,
+      error: 'No healthPath configured (requires dynamic ID)',
+      checkedAt: new Date(),
+    }
+  }
+
   const url = `${API_BASE}${endpoint.healthPath}`
   const start = Date.now()
 
@@ -26,7 +37,7 @@ async function checkEndpoint(endpoint) {
     const res = await fetch(url, {
       method: endpoint.method,
       headers: { 'x-api-key': HEALTH_API_KEY },
-      signal: AbortSignal.timeout(10_000),
+      signal: AbortSignal.timeout(15_000),
     })
 
     const ms = Date.now() - start
@@ -66,7 +77,7 @@ async function checkEndpoint(endpoint) {
       status: 'fail',
       statusCode: null,
       responseTimeMs: Date.now() - start,
-      error: err.name === 'TimeoutError' ? 'Request timed out (10s)' : String(err.message),
+      error: err.name === 'TimeoutError' ? 'Request timed out (15s)' : String(err.message),
       checkedAt: new Date(),
     }
   }

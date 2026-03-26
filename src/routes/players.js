@@ -336,30 +336,25 @@ export default async function playerRoutes(fastify) {
       return success([], { count: 0, page: pageNum, league, market })
     }
 
-    // Fetch player metadata (team)
+    // Fetch player metadata + hit rates in parallel
     const playerIds = [...playerMap.keys()]
-    const playerDocs = await getCollection('players')
-      .find(
-        { playerId: { $in: playerIds } },
-        { projection: { _id: 0, playerId: 1, playerName: 1, teamId: 1, position: 1 } }
-      )
-      .toArray()
+
+    const [playerDocs, hitRateDocs] = await Promise.all([
+      getCollection('players')
+        .find(
+          { playerId: { $in: playerIds } },
+          { projection: { _id: 0, playerId: 1, playerName: 1, teamId: 1, position: 1 } }
+        )
+        .toArray(),
+      getCollection('hit_rates')
+        .find(
+          { playerId: { $in: playerIds }, market, leagueId: league },
+          { projection: { _id: 0, playerId: 1, line: 1, L5: 1, L10: 1, L25: 1, season: 1 } }
+        )
+        .toArray(),
+    ])
 
     const playerMeta = new Map(playerDocs.map((p) => [p.playerId, p]))
-
-    // Fetch pre-computed hit rates for all (playerId, market, line) combos
-    const hitRateFilter = playerIds.map((pid) => {
-      const entry = playerMap.get(pid)
-      return { playerId: pid, market, line: entry.bestLine }
-    })
-
-    const hitRateDocs = await getCollection('hit_rates')
-      .find(
-        { $or: hitRateFilter },
-        { projection: { _id: 0, playerId: 1, line: 1, L5: 1, L10: 1, L25: 1, season: 1 } }
-      )
-      .toArray()
-
     const hitRateMap = new Map(
       hitRateDocs.map((h) => [`${h.playerId}:${h.line}`, h])
     )
@@ -456,31 +451,23 @@ export default async function playerRoutes(fastify) {
     const fields = getStatFields(leagueId, market)
     const currentSeason = getCurrentSeason(leagueId)
 
-    // Fetch game stats for chart + hit rate computation
-    const gameStats = await getCollection('player_stats')
-      .find(
-        { playerId, statType: 'game' },
-        { projection: { _id: 0, season: 1, gameDate: 1, opponent: 1, homeAway: 1, result: 1, stats: 1 } }
-      )
-      .sort({ gameDate: -1 })
-      .limit(200)
-      .toArray()
-
     // Find today's event for this player's team (for context)
     const now = new Date()
     const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
     const dayEnd = new Date(dayStart.getTime() + 86_400_000)
 
-    // Find today's event IDs for this league first, then run parallel queries
-    const todayEventIds = await getCollection('events')
-      .find(
-        { leagueId, startTime: { $gte: dayStart, $lt: dayEnd } },
-        { projection: { _id: 0, eventId: 1 } }
-      )
-      .toArray()
-      .then((evs) => evs.map((e) => e.eventId))
-
-    const [currentEvent, propDocs] = await Promise.all([
+    // Run all independent queries in parallel
+    const [gameStats, currentEvent, propDocs] = await Promise.all([
+      // Game stats for chart + hit rate computation
+      getCollection('player_stats')
+        .find(
+          { playerId, statType: 'game' },
+          { projection: { _id: 0, season: 1, gameDate: 1, opponent: 1, homeAway: 1, result: 1, stats: 1 } }
+        )
+        .sort({ gameDate: -1 })
+        .limit(200)
+        .toArray(),
+      // Today's event for this player's team
       getCollection('events').findOne(
         {
           leagueId,
@@ -489,11 +476,14 @@ export default async function playerRoutes(fastify) {
         },
         { projection: { _id: 0, eventId: 1, homeTeamId: 1, awayTeamId: 1, homeTeamName: 1, awayTeamName: 1, startTime: 1 } }
       ),
+      // Player props — query by playerId directly instead of fetching all event IDs first
       getCollection('player_props')
         .find(
-          { playerIds: playerId, eventId: { $in: todayEventIds } },
+          { playerIds: playerId },
           { projection: { _id: 0, players: 1 } }
         )
+        .sort({ fetchedAt: -1 })
+        .limit(5)
         .toArray(),
     ])
 
