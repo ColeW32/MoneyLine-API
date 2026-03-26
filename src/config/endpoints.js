@@ -36,6 +36,38 @@ export const API_ENDPOINTS = [
     tier: 'free',
   },
 
+  // ── Injuries ───────────────────────────────────────────────
+  {
+    id: 'injuries_nba',
+    category: 'Injuries',
+    label: 'Team Injuries (NBA)',
+    method: 'GET',
+    path: '/v1/teams/{teamId}/injuries',
+    healthPath: null,
+    healthPathTemplate: '/v1/teams/{teamId:nba}/injuries',
+    tier: 'starter',
+  },
+  {
+    id: 'injuries_nhl',
+    category: 'Injuries',
+    label: 'Team Injuries (NHL)',
+    method: 'GET',
+    path: '/v1/teams/{teamId}/injuries',
+    healthPath: null,
+    healthPathTemplate: '/v1/teams/{teamId:nhl}/injuries',
+    tier: 'starter',
+  },
+  {
+    id: 'injuries_mlb',
+    category: 'Injuries',
+    label: 'Team Injuries (MLB)',
+    method: 'GET',
+    path: '/v1/teams/{teamId}/injuries',
+    healthPath: null,
+    healthPathTemplate: '/v1/teams/{teamId:mlb}/injuries',
+    tier: 'starter',
+  },
+
   // ── Events ─────────────────────────────────────────────────
   {
     id: 'events_nba',

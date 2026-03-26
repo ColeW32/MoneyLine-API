@@ -10,6 +10,7 @@ const HEALTH_API_KEY = process.env.ML_LIVE_API_KEY
  */
 let _cachedPlayerId = null
 let _cachedEventId = null
+let _cachedTeamId = {}  // keyed by leagueId
 
 async function resolveSamplePlayerId() {
   if (_cachedPlayerId) return _cachedPlayerId
@@ -30,6 +31,21 @@ async function resolveSamplePlayerId() {
   if (stat?.playerId) {
     _cachedPlayerId = stat.playerId
     return _cachedPlayerId
+  }
+
+  return null
+}
+
+async function resolveSampleTeamId(leagueId) {
+  if (_cachedTeamId[leagueId]) return _cachedTeamId[leagueId]
+
+  const doc = await getCollection('injuries').findOne(
+    { leagueId },
+    { projection: { teamId: 1 } }
+  )
+  if (doc?.teamId) {
+    _cachedTeamId[leagueId] = doc.teamId
+    return _cachedTeamId[leagueId]
   }
 
   return null
@@ -69,6 +85,15 @@ async function resolveHealthPath(endpoint) {
   if (!endpoint.healthPathTemplate) return null
 
   let path = endpoint.healthPathTemplate
+
+  for (const league of ['nba', 'nhl', 'mlb', 'nfl']) {
+    const placeholder = `{teamId:${league}}`
+    if (path.includes(placeholder)) {
+      const teamId = await resolveSampleTeamId(league)
+      if (!teamId) return null
+      path = path.replace(placeholder, teamId)
+    }
+  }
 
   if (path.includes('{playerId}')) {
     const playerId = await resolveSamplePlayerId()
@@ -189,6 +214,7 @@ export async function runHealthChecks() {
   // Clear cached IDs so each run resolves fresh data
   _cachedPlayerId = null
   _cachedEventId = null
+  _cachedTeamId = {}
 
   const BATCH_SIZE = 3
   const results = []
