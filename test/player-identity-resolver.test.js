@@ -66,6 +66,13 @@ test('normalizePlayerNameForMatching: undefined returns empty string', () => {
   assert.equal(normalizePlayerNameForMatching(undefined), '')
 })
 
+test('normalizePlayerNameForMatching: transliterates accented characters', () => {
+  assert.equal(normalizePlayerNameForMatching('Alexis Lafrenière'), 'alexislafreniere')
+  assert.equal(normalizePlayerNameForMatching('Noah Östlund'), 'noahostlund')
+  assert.equal(normalizePlayerNameForMatching('Jerar Encarnación'), 'jerarencarnacion')
+  assert.equal(normalizePlayerNameForMatching('Nikola Jokić'), 'nikolajokic')
+})
+
 test('normalizePlayerNameForMatching: all-suffix input returns empty string', () => {
   // Single token that is a suffix — should not be stripped (need >1 token to strip suffix)
   // "Jr" alone stays as "jr"

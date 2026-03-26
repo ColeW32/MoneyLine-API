@@ -25,6 +25,8 @@ const NEGATIVE_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
  */
 export function normalizePlayerNameForMatching(name) {
   const raw = String(name || '')
+    .normalize('NFD')             // decompose accented chars: é → e + combining accent
+    .replace(/[\u0300-\u036f]/g, '') // strip combining diacritical marks
     .toLowerCase()
     .replace(/[^a-z0-9\s]/g, ' ')
     .trim()
@@ -50,6 +52,8 @@ export function normalizePlayerNameForMatching(name) {
  */
 function tokenizeName(name) {
   return String(name || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .replace(/[^a-z0-9\s]/g, ' ')
     .trim()
