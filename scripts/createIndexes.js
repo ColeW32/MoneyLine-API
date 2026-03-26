@@ -28,6 +28,7 @@ async function createIndexes() {
 
   // edge_data
   await db.collection('edge_data').createIndex({ eventId: 1, calculatedAt: -1 })
+  await db.collection('edge_data').createIndex({ leagueId: 1, calculatedAt: -1 })
   await db.collection('edge_data').createIndex({ 'edges.type': 1, leagueId: 1, calculatedAt: -1 })
   console.log('  - edge_data indexes created')
 

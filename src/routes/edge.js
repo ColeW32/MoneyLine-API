@@ -78,18 +78,22 @@ export default async function edgeRoutes(fastify) {
   // GET /v1/edge/value — value bets only (pro+)
   fastify.get('/v1/edge/value', async (request, reply) => {
     const { league, minEdge, limit: limitParam, sourceType = 'all' } = request.query
-    const filter = { 'edges.type': 'value' }
+    // Match only on leagueId (non-multikey) so sort uses the index.
+    // Edge type filtering is done server-side in $project instead.
+    const filter = {}
     if (league) filter.leagueId = league
 
     const queryLimit = Math.min(50, Math.max(1, parseInt(limitParam) || 25))
     const docs = await getCollection('edge_data').aggregate([
       { $match: filter },
       { $sort: { calculatedAt: -1 } },
-      { $limit: queryLimit },
+      { $limit: queryLimit * 3 },
       { $project: {
         _id: 0, eventId: 1, leagueId: 1, sport: 1, calculatedAt: 1,
         edges: { $filter: { input: '$edges', as: 'e', cond: { $eq: ['$$e.type', 'value'] } } },
       }},
+      { $match: { 'edges.0': { $exists: true } } },
+      { $limit: queryLimit },
     ]).toArray()
 
     const results = docs.flatMap((doc) =>
@@ -111,18 +115,20 @@ export default async function edgeRoutes(fastify) {
   // GET /v1/edge/ev — positive EV bets only (pro+)
   fastify.get('/v1/edge/ev', async (request, reply) => {
     const { league, limit: limitParam, sourceType = 'all' } = request.query
-    const filter = { 'edges.type': 'ev' }
+    const filter = {}
     if (league) filter.leagueId = league
 
     const queryLimit = Math.min(50, Math.max(1, parseInt(limitParam) || 25))
     const docs = await getCollection('edge_data').aggregate([
       { $match: filter },
       { $sort: { calculatedAt: -1 } },
-      { $limit: queryLimit },
+      { $limit: queryLimit * 3 },
       { $project: {
         _id: 0, eventId: 1, leagueId: 1, sport: 1, calculatedAt: 1,
         edges: { $filter: { input: '$edges', as: 'e', cond: { $eq: ['$$e.type', 'ev'] } } },
       }},
+      { $match: { 'edges.0': { $exists: true } } },
+      { $limit: queryLimit },
     ]).toArray()
 
     const results = docs.flatMap((doc) =>
@@ -143,18 +149,20 @@ export default async function edgeRoutes(fastify) {
   // GET /v1/edge/arbitrage — arbitrage opportunities only (pro+)
   fastify.get('/v1/edge/arbitrage', async (request, reply) => {
     const { league, minProfit, limit: limitParam, sourceType = 'all' } = request.query
-    const filter = { 'edges.type': 'arbitrage' }
+    const filter = {}
     if (league) filter.leagueId = league
 
     const queryLimit = Math.min(50, Math.max(1, parseInt(limitParam) || 25))
     const docs = await getCollection('edge_data').aggregate([
       { $match: filter },
       { $sort: { calculatedAt: -1 } },
-      { $limit: queryLimit },
+      { $limit: queryLimit * 3 },
       { $project: {
         _id: 0, eventId: 1, leagueId: 1, sport: 1, calculatedAt: 1,
         edges: { $filter: { input: '$edges', as: 'e', cond: { $eq: ['$$e.type', 'arbitrage'] } } },
       }},
+      { $match: { 'edges.0': { $exists: true } } },
+      { $limit: queryLimit },
     ]).toArray()
 
     const results = docs.flatMap((doc) =>
@@ -178,10 +186,14 @@ export default async function edgeRoutes(fastify) {
     const { eventId } = request.params
     const { sourceType = 'all' } = request.query
 
-    const doc = await getCollection('edge_data').findOne(
-      { eventId },
-      { projection: { _id: 0 }, sort: { calculatedAt: -1 } }
-    )
+    const docs = await getCollection('edge_data').aggregate([
+      { $match: { eventId } },
+      { $sort: { calculatedAt: -1 } },
+      { $limit: 1 },
+      { $project: { _id: 0 } },
+    ]).toArray()
+
+    const doc = docs[0] || null
 
     if (!doc) {
       return reply.code(404).send(error(`Edge data for event '${eventId}' not found.`, 404))
