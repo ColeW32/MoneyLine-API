@@ -1177,8 +1177,8 @@ function registerLeagueSchedules(leagues) {
     const leagueMinuteOffset = index * 15
     const goalserveEnabled = hasGoalserveConfig()
 
-    // Odds: every 10 min, staggered (offset by 5 from scores)
-    const oddsMins = Array.from({ length: 6 }, (_, i) => (offset + 5 + i * 10) % 60).join(',')
+    // Odds: every 20 min, staggered (offset by 5 from scores)
+    const oddsMins = Array.from({ length: 3 }, (_, i) => (offset + 5 + i * 20) % 60).join(',')
     cron.schedule(`${oddsMins} * * * *`, () => jobOdds(config))
 
     if (goalserveEnabled) {
@@ -1198,9 +1198,9 @@ function registerLeagueSchedules(leagues) {
       // Rosters: daily at 6 AM, 15 minutes apart by league
       cron.schedule(`${leagueMinuteOffset} 6 * * *`, () => jobRosters(config))
 
-      console.log(`  - ${config.name}: scores/odds every 10m, standings/injuries 6h (15m stagger), player stats every 6h, rosters daily`)
+      console.log(`  - ${config.name}: scores every 10m, odds every 20m, standings/injuries 6h (15m stagger), player stats every 6h, rosters daily`)
     } else {
-      console.log(`  - ${config.name}: odds every 10m (GoalServe jobs disabled; DATA_SOURCE_A not configured)`)
+      console.log(`  - ${config.name}: odds every 20m (GoalServe jobs disabled; DATA_SOURCE_A not configured)`)
     }
   })
 }
