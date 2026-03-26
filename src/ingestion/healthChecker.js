@@ -84,10 +84,16 @@ async function checkEndpoint(endpoint) {
 }
 
 /**
- * Run health checks for all endpoints and upsert results into MongoDB.
+ * Run health checks in small batches to avoid overwhelming the server.
  */
 export async function runHealthChecks() {
-  const results = await Promise.all(API_ENDPOINTS.map(checkEndpoint))
+  const BATCH_SIZE = 4
+  const results = []
+  for (let i = 0; i < API_ENDPOINTS.length; i += BATCH_SIZE) {
+    const batch = API_ENDPOINTS.slice(i, i + BATCH_SIZE)
+    const batchResults = await Promise.all(batch.map(checkEndpoint))
+    results.push(...batchResults)
+  }
 
   const col = getCollection('health_checks')
   await Promise.all(

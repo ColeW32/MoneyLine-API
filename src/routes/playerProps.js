@@ -126,8 +126,8 @@ export default async function playerPropsRoutes(fastify) {
     const pageSize = Math.min(50, Math.max(1, parseInt(limit) || 25))
 
     const docs = await getCollection('player_props')
-      .find(filter, { projection: { _id: 0, marketTypes: 0, playerNames: 0 } })
-      .sort({ fetchedAt: -1, eventId: 1 })
+      .find(filter, { projection: { _id: 0, marketTypes: 0, playerNames: 0, playerIds: 0 } })
+      .sort({ fetchedAt: -1 })
       .skip((pageNum - 1) * pageSize)
       .limit(pageSize)
       .toArray()

@@ -119,7 +119,7 @@ export const API_ENDPOINTS = [
     label: 'Value Bets',
     method: 'GET',
     path: '/v1/edge/value?league=nba&sourceType=all',
-    healthPath: '/v1/edge/value?league=nba&sourceType=all',
+    healthPath: '/v1/edge/value?league=nba&sourceType=all&limit=5',
     tier: 'pro',
   },
   {
@@ -128,7 +128,7 @@ export const API_ENDPOINTS = [
     label: 'Expected Value',
     method: 'GET',
     path: '/v1/edge/ev?league=nba&sourceType=all',
-    healthPath: '/v1/edge/ev?league=nba&sourceType=all',
+    healthPath: '/v1/edge/ev?league=nba&sourceType=all&limit=5',
     tier: 'pro',
   },
   {
@@ -137,7 +137,7 @@ export const API_ENDPOINTS = [
     label: 'Arbitrage',
     method: 'GET',
     path: '/v1/edge/arbitrage?league=nba&sourceType=all',
-    healthPath: '/v1/edge/arbitrage?league=nba&sourceType=all',
+    healthPath: '/v1/edge/arbitrage?league=nba&sourceType=all&limit=5',
     tier: 'pro',
   },
 
@@ -148,7 +148,7 @@ export const API_ENDPOINTS = [
     label: 'Trending Players',
     method: 'GET',
     path: '/v1/players/trending?league=nba&market=player_points&sortBy=l5',
-    healthPath: '/v1/players/trending?league=nba&market=player_points&sortBy=l5',
+    healthPath: '/v1/players/trending?league=nba&market=player_points&sortBy=l5&limit=5',
     tier: 'pro',
   },
   {
@@ -157,7 +157,7 @@ export const API_ENDPOINTS = [
     label: 'Trending Players (NHL)',
     method: 'GET',
     path: '/v1/players/trending?league=nhl&market=player_shots_on_goal&sortBy=l5',
-    healthPath: '/v1/players/trending?league=nhl&market=player_shots_on_goal&sortBy=l5',
+    healthPath: '/v1/players/trending?league=nhl&market=player_shots_on_goal&sortBy=l5&limit=5',
     tier: 'pro',
   },
   {

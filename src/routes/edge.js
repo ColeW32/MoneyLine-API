@@ -77,14 +77,15 @@ export default async function edgeRoutes(fastify) {
 
   // GET /v1/edge/value — value bets only (pro+)
   fastify.get('/v1/edge/value', async (request, reply) => {
-    const { league, minEdge, sourceType = 'all' } = request.query
+    const { league, minEdge, limit: limitParam, sourceType = 'all' } = request.query
     const filter = { 'edges.type': 'value' }
     if (league) filter.leagueId = league
 
+    const queryLimit = Math.min(50, Math.max(1, parseInt(limitParam) || 25))
     const docs = await getCollection('edge_data')
       .find(filter, { projection: { _id: 0 } })
       .sort({ calculatedAt: -1 })
-      .limit(50)
+      .limit(queryLimit)
       .toArray()
 
     const results = docs.flatMap((doc) =>
@@ -106,14 +107,15 @@ export default async function edgeRoutes(fastify) {
 
   // GET /v1/edge/ev — positive EV bets only (pro+)
   fastify.get('/v1/edge/ev', async (request, reply) => {
-    const { league, sourceType = 'all' } = request.query
+    const { league, limit: limitParam, sourceType = 'all' } = request.query
     const filter = { 'edges.type': 'ev' }
     if (league) filter.leagueId = league
 
+    const queryLimit = Math.min(50, Math.max(1, parseInt(limitParam) || 25))
     const docs = await getCollection('edge_data')
       .find(filter, { projection: { _id: 0 } })
       .sort({ calculatedAt: -1 })
-      .limit(50)
+      .limit(queryLimit)
       .toArray()
 
     const results = docs.flatMap((doc) =>
@@ -134,14 +136,15 @@ export default async function edgeRoutes(fastify) {
 
   // GET /v1/edge/arbitrage — arbitrage opportunities only (pro+)
   fastify.get('/v1/edge/arbitrage', async (request, reply) => {
-    const { league, minProfit, sourceType = 'all' } = request.query
+    const { league, minProfit, limit: limitParam, sourceType = 'all' } = request.query
     const filter = { 'edges.type': 'arbitrage' }
     if (league) filter.leagueId = league
 
+    const queryLimit = Math.min(50, Math.max(1, parseInt(limitParam) || 25))
     const docs = await getCollection('edge_data')
       .find(filter, { projection: { _id: 0 } })
       .sort({ calculatedAt: -1 })
-      .limit(50)
+      .limit(queryLimit)
       .toArray()
 
     const results = docs.flatMap((doc) =>
