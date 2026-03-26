@@ -104,4 +104,72 @@ export default async function adminRoutes(fastify) {
     runHealthChecks().catch((err) => console.error('[health] Manual run failed:', err))
     return success({ message: 'Health check started.' })
   })
+
+  // ── Name mapping stats ─────────────────────────────────────
+  fastify.get('/admin/name-mapping', { preHandler: [verifyJwt, requireAdmin] }, async () => {
+    const SPORT_TO_LEAGUE = {
+      basketball: 'nba',
+      football: 'nfl',
+      baseball: 'mlb',
+      hockey: 'nhl',
+    }
+
+    const [strategyRows, unresolvedDocs] = await Promise.all([
+      getCollection('source_id_map_v2').aggregate([
+        { $match: { source: 'oddsapi', entityType: 'player' } },
+        {
+          $group: {
+            _id: { sport: '$sport', strategy: '$resolutionStrategy' },
+            count: { $sum: 1 },
+          },
+        },
+      ]).toArray(),
+      getCollection('player_name_review')
+        .find({})
+        .sort({ firstSeenAt: -1 })
+        .limit(200)
+        .toArray(),
+    ])
+
+    // Build per-sport stats
+    const sportStats = {}
+    for (const row of strategyRows) {
+      const { sport, strategy } = row._id
+      if (!sportStats[sport]) {
+        sportStats[sport] = {
+          sport,
+          leagueId: SPORT_TO_LEAGUE[sport] || sport,
+          total: 0,
+          resolved: 0,
+          unresolved: 0,
+          byStrategy: {},
+        }
+      }
+      const s = sportStats[sport]
+      s.total += row.count
+      s.byStrategy[strategy] = (s.byStrategy[strategy] || 0) + row.count
+      if (strategy === 'unresolved') {
+        s.unresolved += row.count
+      } else {
+        s.resolved += row.count
+      }
+    }
+
+    const leagues = Object.values(sportStats).map((s) => ({
+      ...s,
+      resolutionRate: s.total > 0 ? Math.round((s.resolved / s.total) * 1000) / 10 : 0,
+    }))
+
+    const unresolved = unresolvedDocs.map((d) => ({
+      playerName: d.playerName,
+      normalizedName: d.normalizedName,
+      leagueId: d.leagueId,
+      sport: d.sport,
+      eventId: d.eventId,
+      firstSeenAt: d.firstSeenAt,
+      retryAfter: d.retryAfter,
+    }))
+
+    return success({ leagues, unresolved })
+  })
 }
