@@ -16,21 +16,23 @@ function comparePoints(a, b) {
   return a - b
 }
 
-function isGenericSelectionName(name) {
-  const normalized = String(name || '').trim().toLowerCase()
-  return ['over', 'under', 'yes', 'no'].includes(normalized)
+function isNonPlayerOutcome(name) {
+  const lower = String(name || '').trim().toLowerCase()
+  // Exact generic selection names (over/under/yes/no)
+  if (['over', 'under', 'yes', 'no'].includes(lower)) return true
+  // Market outcome descriptions like "No Home Run", "No Scorer", "No 1st Goal"
+  if (/^no\s+/.test(lower)) return true
+  return false
 }
 
-function getPlayerName(outcome, marketDefinition) {
+function getPlayerName(outcome) {
   const description = String(outcome?.description || '').trim()
   if (description) return description
 
   const name = String(outcome?.name || '').trim()
   if (!name) return null
 
-  if (marketDefinition?.format === 'over_under' && isGenericSelectionName(name)) {
-    return null
-  }
+  if (isNonPlayerOutcome(name)) return null
 
   return name
 }
@@ -49,7 +51,7 @@ export function buildPlayerPropsDocFromOddsDoc(oddsDoc) {
       if (!marketDefinition) continue
 
       for (const outcome of market.outcomes || []) {
-        const playerName = getPlayerName(outcome, marketDefinition)
+        const playerName = getPlayerName(outcome)
         if (!playerName) continue
 
         const point = typeof outcome.point === 'number' && Number.isFinite(outcome.point)

@@ -36,7 +36,8 @@ async function run() {
   if (dryRun) console.log(col('  DRY RUN — no writes', YELLOW))
   console.log()
 
-  const filter = { 'players.playerId': { $exists: false } }
+  // Match docs where any player entry is missing a playerId OR has playerId: null
+  const filter = { 'players.playerId': null }
   if (leagueArg) filter.leagueId = leagueArg
 
   const total = await getCollection('player_props').countDocuments(filter)

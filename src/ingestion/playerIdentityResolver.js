@@ -28,6 +28,7 @@ export function normalizePlayerNameForMatching(name) {
     .normalize('NFD')             // decompose accented chars: é → e + combining accent
     .replace(/[\u0300-\u036f]/g, '') // strip combining diacritical marks
     .toLowerCase()
+    .replace(/\s*\([^)]*\)/g, ' ') // strip parenthetical disambiguators: (2004), (Jr.), etc.
     .replace(/[^a-z0-9\s]/g, ' ')
     .trim()
 
@@ -114,6 +115,37 @@ async function writeToReviewQueue(playerName, normalizedName, leagueId, sport, e
 }
 
 /**
+ * Fuzzy-match player name tokens against a roster.
+ * Tries last name + first initial first, then unique last name.
+ * Returns { playerId, strategy } or null.
+ */
+function fuzzyMatchRoster(inputTokens, roster) {
+  const inputLast = inputTokens[inputTokens.length - 1]
+  const inputFirstInitial = inputTokens[0]?.[0]
+
+  if (inputFirstInitial) {
+    const lastInitialMatches = roster.filter((p) => {
+      const tokens = tokenizeName(p.name)
+      if (tokens.length === 0) return false
+      return tokens[tokens.length - 1] === inputLast && tokens[0]?.[0] === inputFirstInitial
+    })
+    if (lastInitialMatches.length === 1) {
+      return { playerId: lastInitialMatches[0].playerId, strategy: 'fuzzy_last_initial' }
+    }
+  }
+
+  const lastNameMatches = roster.filter((p) => {
+    const tokens = tokenizeName(p.name)
+    return tokens.length > 0 && tokens[tokens.length - 1] === inputLast
+  })
+  if (lastNameMatches.length === 1) {
+    return { playerId: lastNameMatches[0].playerId, strategy: 'fuzzy_last_name' }
+  }
+
+  return null
+}
+
+/**
  * Resolve a player name string from the Odds API to a MoneyLine playerId.
  *
  * Resolution tiers (in order):
@@ -122,6 +154,7 @@ async function writeToReviewQueue(playerName, normalizedName, leagueId, sport, e
  *   3. Team-scoped exact match (players on the two teams in the event)
  *   4. Fuzzy: last name + first initial within team roster
  *   5. Fuzzy: unique last name within team roster
+ *   6. League-wide fuzzy fallback (when event not in events collection)
  *
  * Returns a playerId string or null.
  */
@@ -159,86 +192,66 @@ export async function resolvePlayerIdFromName(playerName, leagueId, eventId) {
     return exactMatches[0].playerId
   }
 
-  // 3. Team-scoped narrowing (need eventId for this and fuzzy steps)
-  if (!eventId) {
-    await upsertPlayerNameMapping(normalizedName, sport, null, 'unresolved')
-    await writeToReviewQueue(playerName, normalizedName, leagueId, sport, null)
-    return null
-  }
-
-  const event = await getCollection('events').findOne(
-    { eventId },
-    { projection: { _id: 0, homeTeamId: 1, awayTeamId: 1 } }
-  )
-
-  if (!event?.homeTeamId || !event?.awayTeamId) {
-    await upsertPlayerNameMapping(normalizedName, sport, null, 'unresolved')
-    await writeToReviewQueue(playerName, normalizedName, leagueId, sport, eventId)
-    return null
-  }
-
-  const teamIds = [event.homeTeamId, event.awayTeamId]
-
-  // Team-scoped exact match
-  const teamScopedExact = exactMatches.filter((p) => teamIds.includes(p.teamId))
-  if (teamScopedExact.length === 1) {
-    await upsertPlayerNameMapping(normalizedName, sport, teamScopedExact[0].playerId, 'team_scoped')
-    return teamScopedExact[0].playerId
-  }
-
-  // 4 & 5. Fuzzy matching — load full roster for both teams
-  const roster = await playersCol
-    .find(
-      { teamId: { $in: teamIds } },
-      { projection: { _id: 0, playerId: 1, name: 1, teamId: 1 } }
-    )
-    .toArray()
-
-  if (roster.length === 0) {
-    await upsertPlayerNameMapping(normalizedName, sport, null, 'unresolved')
-    await writeToReviewQueue(playerName, normalizedName, leagueId, sport, eventId)
-    return null
-  }
-
+  // Precompute tokens for fuzzy steps (3–6)
   const inputTokens = tokenizeName(playerName)
-  if (inputTokens.length === 0) {
-    await upsertPlayerNameMapping(normalizedName, sport, null, 'unresolved')
-    return null
-  }
 
-  const inputLast = inputTokens[inputTokens.length - 1]
-  const inputFirstInitial = inputTokens[0]?.[0]
+  // 3. Team-scoped matching (requires a valid event with known home/away teams)
+  const event = eventId
+    ? await getCollection('events').findOne(
+        { eventId },
+        { projection: { _id: 0, homeTeamId: 1, awayTeamId: 1 } }
+      )
+    : null
 
-  // 4. Last name + first initial match
-  if (inputFirstInitial) {
-    const lastInitialMatches = roster.filter((p) => {
-      const tokens = tokenizeName(p.name)
-      if (tokens.length === 0) return false
-      const last = tokens[tokens.length - 1]
-      const firstInitial = tokens[0]?.[0]
-      return last === inputLast && firstInitial === inputFirstInitial
-    })
+  if (event?.homeTeamId && event?.awayTeamId) {
+    const teamIds = [event.homeTeamId, event.awayTeamId]
 
-    if (lastInitialMatches.length === 1) {
-      await upsertPlayerNameMapping(normalizedName, sport, lastInitialMatches[0].playerId, 'fuzzy_last_initial')
-      return lastInitialMatches[0].playerId
+    // Team-scoped exact match (disambiguates when player appears on multiple teams)
+    const teamScopedExact = exactMatches.filter((p) => teamIds.includes(p.teamId))
+    if (teamScopedExact.length === 1) {
+      await upsertPlayerNameMapping(normalizedName, sport, teamScopedExact[0].playerId, 'team_scoped')
+      return teamScopedExact[0].playerId
+    }
+
+    // 4 & 5. Fuzzy matching within team roster
+    if (inputTokens.length > 0) {
+      const roster = await playersCol
+        .find({ teamId: { $in: teamIds } }, { projection: { _id: 0, playerId: 1, name: 1, teamId: 1 } })
+        .toArray()
+
+      if (roster.length > 0) {
+        const fuzzyResult = fuzzyMatchRoster(inputTokens, roster)
+        if (fuzzyResult) {
+          await upsertPlayerNameMapping(normalizedName, sport, fuzzyResult.playerId, fuzzyResult.strategy)
+          return fuzzyResult.playerId
+        }
+      }
     }
   }
 
-  // 5. Unique last name on roster
-  const lastNameMatches = roster.filter((p) => {
-    const tokens = tokenizeName(p.name)
-    return tokens.length > 0 && tokens[tokens.length - 1] === inputLast
-  })
+  // 6. League-wide fuzzy fallback — used when:
+  //    - Event ID doesn't match any event in the events collection (e.g. cross-game or season-long
+  //      odds events with hash-format IDs that have no GoalServe counterpart), OR
+  //    - No eventId was provided at all
+  //    Only attempted when exact match returned 0 results; multiple exact matches require
+  //    team-scope context to disambiguate safely.
+  if (exactMatches.length === 0 && inputTokens.length > 0) {
+    const leagueRoster = await playersCol
+      .find({ leagueId }, { projection: { _id: 0, playerId: 1, name: 1, teamId: 1 } })
+      .toArray()
 
-  if (lastNameMatches.length === 1) {
-    await upsertPlayerNameMapping(normalizedName, sport, lastNameMatches[0].playerId, 'fuzzy_last_name')
-    return lastNameMatches[0].playerId
+    if (leagueRoster.length > 0) {
+      const fuzzyResult = fuzzyMatchRoster(inputTokens, leagueRoster)
+      if (fuzzyResult) {
+        await upsertPlayerNameMapping(normalizedName, sport, fuzzyResult.playerId, fuzzyResult.strategy)
+        return fuzzyResult.playerId
+      }
+    }
   }
 
   // Unresolved — store negative cache and review entry
   await upsertPlayerNameMapping(normalizedName, sport, null, 'unresolved')
-  await writeToReviewQueue(playerName, normalizedName, leagueId, sport, eventId)
+  await writeToReviewQueue(playerName, normalizedName, leagueId, sport, eventId ?? null)
   return null
 }
 
