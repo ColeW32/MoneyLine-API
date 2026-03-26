@@ -53,6 +53,9 @@ async function createIndexes() {
   try {
     await db.collection('player_stats').dropIndex('playerId_1_statType_1_eventId_1')
   } catch {}
+  try {
+    await db.collection('player_stats').dropIndex('player_game_unique')
+  } catch {}
   await db.collection('player_stats').createIndex(
     { playerId: 1, statType: 1, eventId: 1 },
     { unique: true, partialFilterExpression: { statType: 'game' } }
