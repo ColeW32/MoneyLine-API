@@ -172,25 +172,27 @@ export async function normalizeStandings(raw) {
 }
 
 export async function normalizeRoster(raw, gsTeamAbbr) {
-  if (!raw?.team?.player) return null
+  const team = raw?.team
+  if (!team) return null
 
-  const team = raw.team
+  // GoalServe NFL rosters nest players under <position> elements (no "@" prefix).
+  const positionGroups = toArray(team.position)
+  const allPlayerNodes = positionGroups.flatMap((pos) => toArray(pos.player))
+  if (allPlayerNodes.length === 0) return null
+
   const teamId = await getMoneylineId(SOURCE, team.id, 'team', SPORT, team.name)
-  const players = Array.isArray(team.player) ? team.player : [team.player]
 
   const normalized = []
-  for (const p of players) {
+  const playerDocs = []
+
+  for (const p of allPlayerNodes) {
+    if (!p?.id || !p?.name) continue
     const playerId = await getMoneylineId(SOURCE, p.id, 'player', SPORT, p.name)
     normalized.push({
       playerId, name: p.name, position: p.position || '', number: p.number || '',
       age: parseInt(p.age) || null, height: p.heigth || '', weight: p.weigth || '',
       college: p.college !== '--' ? p.college : '', experience: null,
     })
-  }
-
-  const playerDocs = []
-  for (const p of players) {
-    const playerId = await getMoneylineId(SOURCE, p.id, 'player', SPORT, p.name)
     playerDocs.push({
       playerId, teamId, leagueId: LEAGUE, name: p.name,
       position: p.position || '', number: p.number || '',

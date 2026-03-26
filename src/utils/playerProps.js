@@ -159,6 +159,7 @@ function annotateBestOffers(players) {
 export function filterPlayerPropsDoc(playerPropsDoc, {
   market,
   player,
+  playerId,
   bookmaker,
   sourceType = 'all',
 } = {}) {
@@ -169,6 +170,7 @@ export function filterPlayerPropsDoc(playerPropsDoc, {
 
   const players = (playerPropsDoc.players || [])
     .filter((playerEntry) => {
+      if (playerId && playerEntry.playerId !== playerId) return false
       if (!normalizedPlayer) return true
       return playerEntry.playerName.toLowerCase().includes(normalizedPlayer)
     })

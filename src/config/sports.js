@@ -263,11 +263,12 @@ export const SPORTS = {
       featuredMarkets: ['h2h', 'spreads', 'totals'],
       playerPropMarkets: MLB_PLAYER_PROP_MARKETS,
     },
+    // GoalServe MLB abbreviations (some differ from standard team codes)
     teamAbbrs: [
-      'ari', 'atl', 'bal', 'bos', 'chc', 'cws', 'cin', 'cle',
-      'col', 'det', 'hou', 'kc', 'laa', 'lad', 'mia', 'mil',
-      'min', 'nym', 'nyy', 'oak', 'phi', 'pit', 'sd', 'sf',
-      'sea', 'stl', 'tb', 'tex', 'tor', 'wsh',
+      'ari', 'atl', 'bal', 'bos', 'chc', 'chw', 'cin', 'cle',
+      'col', 'det', 'hou', 'kan', 'laa', 'lad', 'fla', 'mil',
+      'min', 'nym', 'nyy', 'oak', 'phi', 'pit', 'sdg', 'sfo',
+      'sea', 'stl', 'tam', 'tex', 'tor', 'was',
     ],
     season: { startMonth: 2, endMonth: 9, format: 'year' }, // Mar-Oct → "2026"
   },
@@ -287,10 +288,10 @@ export const SPORTS = {
       playerPropMarkets: NHL_PLAYER_PROP_MARKETS,
     },
     teamAbbrs: [
-      'ana', 'ari', 'bos', 'buf', 'cgy', 'car', 'chi', 'col',
+      'ana', 'phx', 'bos', 'buf', 'cgy', 'car', 'chi', 'col',
       'cbj', 'dal', 'det', 'edm', 'fla', 'la', 'min', 'mtl',
       'nsh', 'nj', 'nyi', 'nyr', 'ott', 'phi', 'pit', 'sj',
-      'sea', 'stl', 'tb', 'tor', 'van', 'vgk', 'wpg', 'wsh',
+      'sea', 'stl', 'tb', 'tor', 'van', 'vgs', 'atl', 'wsh',
     ],
     season: { startMonth: 9, endMonth: 5, format: 'split' }, // Oct-Jun → "2025-26"
   },

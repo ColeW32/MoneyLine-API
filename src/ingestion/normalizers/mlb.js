@@ -182,35 +182,48 @@ export async function normalizeStandings(raw) {
 }
 
 export async function normalizeRoster(raw, gsTeamAbbr) {
-  if (!raw?.team?.player) return null
+  const team = raw?.team
+  if (!team) return null
 
-  const team = raw.team
-  const teamId = await getMoneylineId(SOURCE, team.id, 'team', SPORT, team.name)
-  const players = Array.isArray(team.player) ? team.player : [team.player]
+  // GoalServe MLB rosters nest players under <position> elements, and all XML
+  // attributes are prefixed with "@" in the JSON representation.
+  const positionGroups = toArray(team.position)
+  const allPlayerNodes = positionGroups.flatMap((pos) => toArray(pos.player))
+  if (allPlayerNodes.length === 0) return null
+
+  // Helper: read attribute with or without "@" prefix (MLB uses "@name", others use "name")
+  const attr = (node, key) => node[`@${key}`] ?? node[key] ?? ''
+
+  const teamName = attr(team, 'name')
+  const teamRawId = attr(team, 'id')
+  const teamId = await getMoneylineId(SOURCE, teamRawId, 'team', SPORT, teamName)
 
   const normalized = []
-  for (const p of players) {
-    const playerId = await getMoneylineId(SOURCE, p.id, 'player', SPORT, p.name)
-    normalized.push({
-      playerId, name: p.name, position: p.position || '', number: p.number || '',
-      age: parseInt(p.age) || null, height: p.heigth || '', weight: p.weigth || '',
-      college: p.college !== '--' ? p.college : '', experience: null,
-    })
-  }
-
   const playerDocs = []
-  for (const p of players) {
-    const playerId = await getMoneylineId(SOURCE, p.id, 'player', SPORT, p.name)
+
+  for (const p of allPlayerNodes) {
+    const name = attr(p, 'name')
+    const id = attr(p, 'id')
+    if (!id || !name) continue
+
+    const playerId = await getMoneylineId(SOURCE, id, 'player', SPORT, name)
+    const position = attr(p, 'position')
+    const number = attr(p, 'number')
+    const age = parseInt(attr(p, 'age')) || null
+
+    normalized.push({
+      playerId, name, position, number, age,
+      height: attr(p, 'height'), weight: attr(p, 'weight'), college: '', experience: null,
+    })
     playerDocs.push({
-      playerId, teamId, leagueId: LEAGUE, name: p.name,
-      position: p.position || '', number: p.number || '',
+      playerId, teamId, leagueId: LEAGUE, name, position, number,
       status: 'active', updatedAt: new Date(),
     })
   }
 
   return {
     roster: { teamId, leagueId: LEAGUE, season: getCurrentSeason(LEAGUE), players: normalized, updatedAt: new Date() },
-    team: { teamId, leagueId: LEAGUE, name: team.name, abbreviation: TEAM_ABBR_MAP[gsTeamAbbr] || gsTeamAbbr.toUpperCase(), updatedAt: new Date() },
+    team: { teamId, leagueId: LEAGUE, name: teamName, abbreviation: TEAM_ABBR_MAP[gsTeamAbbr] || gsTeamAbbr.toUpperCase(), updatedAt: new Date() },
     players: playerDocs,
   }
 }

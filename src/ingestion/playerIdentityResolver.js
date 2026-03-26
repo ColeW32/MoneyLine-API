@@ -161,7 +161,6 @@ export async function resolvePlayerIdFromName(playerName, leagueId, eventId) {
 
   // 3. Team-scoped narrowing (need eventId for this and fuzzy steps)
   if (!eventId) {
-    // No event context — can't safely narrow; store negative cache
     await upsertPlayerNameMapping(normalizedName, sport, null, 'unresolved')
     await writeToReviewQueue(playerName, normalizedName, leagueId, sport, null)
     return null

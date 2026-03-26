@@ -666,12 +666,15 @@ function buildPlayerUpsertOps(playerProfiles) {
           playerId: profile.playerId,
           teamId: profile.teamId,
           leagueId: profile.leagueId,
-          name: profile.playerName,
-          normalizedName: normalizePlayerNameForMatching(profile.playerName),
           position: profile.position || '',
           updatedAt: new Date(),
         },
+        // name and normalizedName are set only on insert — the daily roster job
+        // is the authoritative source for player names and must not be overwritten
+        // by boxscore/stats data (which may use abbreviated names for some leagues).
         $setOnInsert: {
+          name: profile.playerName,
+          normalizedName: normalizePlayerNameForMatching(profile.playerName),
           status: 'active',
         },
       },
@@ -764,7 +767,7 @@ async function jobRosters(config) {
     for (const p of result.players) {
       await getCollection('players').updateOne(
         { playerId: p.playerId },
-        { $set: p },
+        { $set: { ...p, normalizedName: normalizePlayerNameForMatching(p.name) } },
         { upsert: true }
       )
       playerCount++

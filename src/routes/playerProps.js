@@ -29,6 +29,7 @@ export default async function playerPropsRoutes(fastify) {
       league,
       market,
       player,
+      playerId,
       bookmaker,
       sourceType,
       limit,
@@ -43,6 +44,7 @@ export default async function playerPropsRoutes(fastify) {
     if (league) filter.leagueId = league
     if (market) filter.marketTypes = market
     if (player) filter.playerNames = { $regex: escapeRegex(player), $options: 'i' }
+    if (playerId) filter.playerIds = playerId
 
     const pageNum = Math.max(1, parseInt(page) || 1)
     const pageSize = Math.min(50, Math.max(1, parseInt(limit) || 25))
@@ -55,7 +57,7 @@ export default async function playerPropsRoutes(fastify) {
       .toArray()
 
     const results = docs
-      .map((doc) => filterPlayerPropsDoc(doc, { market, player, bookmaker, sourceType }))
+      .map((doc) => filterPlayerPropsDoc(doc, { market, player, playerId, bookmaker, sourceType }))
       .filter(Boolean)
 
     return success(results, { count: results.length, page: pageNum })
@@ -63,7 +65,7 @@ export default async function playerPropsRoutes(fastify) {
 
   fastify.get('/v1/events/:eventId/player-props', async (request, reply) => {
     const { eventId } = request.params
-    const { market, player, bookmaker, sourceType } = request.query
+    const { market, player, playerId, bookmaker, sourceType } = request.query
 
     const doc = await getCollection('player_props').findOne(
       { eventId },
@@ -74,7 +76,7 @@ export default async function playerPropsRoutes(fastify) {
       return reply.code(404).send(error(`Player props for event '${eventId}' not found.`, 404))
     }
 
-    const filtered = filterPlayerPropsDoc(doc, { market, player, bookmaker, sourceType })
+    const filtered = filterPlayerPropsDoc(doc, { market, player, playerId, bookmaker, sourceType })
     if (!filtered) {
       return reply.code(404).send(error(`Player props for event '${eventId}' not found.`, 404))
     }
