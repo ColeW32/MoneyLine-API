@@ -2,6 +2,8 @@
  * Canonical registry of all public API endpoints.
  * Used by the admin API tester dropdown and the health checker.
  * Add new endpoints here to have them automatically appear in both.
+ *
+ * Health check paths should use active leagues (NBA, NHL, MLB) — NFL is offseason.
  */
 
 export const API_ENDPOINTS = [
@@ -36,21 +38,30 @@ export const API_ENDPOINTS = [
 
   // ── Events ─────────────────────────────────────────────────
   {
-    id: 'events',
-    category: 'Events',
-    label: 'List Events',
-    method: 'GET',
-    path: '/v1/events?league=nfl',
-    healthPath: '/v1/events?league=nfl',
-    tier: 'free',
-  },
-  {
     id: 'events_nba',
     category: 'Events',
     label: 'List Events (NBA)',
     method: 'GET',
     path: '/v1/events?league=nba',
     healthPath: '/v1/events?league=nba',
+    tier: 'free',
+  },
+  {
+    id: 'events_nhl',
+    category: 'Events',
+    label: 'List Events (NHL)',
+    method: 'GET',
+    path: '/v1/events?league=nhl',
+    healthPath: '/v1/events?league=nhl',
+    tier: 'free',
+  },
+  {
+    id: 'events_mlb',
+    category: 'Events',
+    label: 'List Events (MLB)',
+    method: 'GET',
+    path: '/v1/events?league=mlb',
+    healthPath: '/v1/events?league=mlb',
     tier: 'free',
   },
 
@@ -67,10 +78,10 @@ export const API_ENDPOINTS = [
   {
     id: 'odds',
     category: 'Odds',
-    label: 'List Odds',
+    label: 'List Odds (NBA)',
     method: 'GET',
-    path: '/v1/odds?league=nfl&sourceType=all',
-    healthPath: '/v1/odds?league=nfl&sourceType=all',
+    path: '/v1/odds?league=nba&sourceType=all',
+    healthPath: '/v1/odds?league=nba&sourceType=all&limit=5',
     tier: 'starter',
   },
   {
@@ -78,8 +89,8 @@ export const API_ENDPOINTS = [
     category: 'Odds',
     label: 'List Odds (DFS)',
     method: 'GET',
-    path: '/v1/odds?league=nfl&sourceType=dfs',
-    healthPath: '/v1/odds?league=nfl&sourceType=dfs',
+    path: '/v1/odds?league=nba&sourceType=dfs',
+    healthPath: '/v1/odds?league=nba&sourceType=dfs&limit=5',
     tier: 'starter',
   },
 
@@ -99,7 +110,7 @@ export const API_ENDPOINTS = [
     label: 'List Player Props',
     method: 'GET',
     path: '/v1/player-props?league=nba&market=player_points&sourceType=all&limit=5',
-    healthPath: '/v1/player-props?league=nba&market=player_points&sourceType=all&limit=5',
+    healthPath: '/v1/player-props?league=nba&market=player_points&sourceType=all&limit=1',
     tier: 'starter',
   },
 
@@ -107,10 +118,10 @@ export const API_ENDPOINTS = [
   {
     id: 'edge',
     category: 'Edge',
-    label: 'Edge Analysis',
+    label: 'Edge Analysis (NBA)',
     method: 'GET',
-    path: '/v1/edge?league=nfl&sourceType=all',
-    healthPath: '/v1/edge?league=nfl&sourceType=all',
+    path: '/v1/edge?league=nba&sourceType=all',
+    healthPath: '/v1/edge?league=nba&sourceType=all&limit=5',
     tier: 'pro',
   },
   {
@@ -119,7 +130,7 @@ export const API_ENDPOINTS = [
     label: 'Value Bets',
     method: 'GET',
     path: '/v1/edge/value?league=nba&sourceType=all',
-    healthPath: '/v1/edge/value?league=nba&sourceType=all&limit=5',
+    healthPath: '/v1/edge/value?league=nba&sourceType=all&limit=3',
     tier: 'pro',
   },
   {
@@ -128,7 +139,7 @@ export const API_ENDPOINTS = [
     label: 'Expected Value',
     method: 'GET',
     path: '/v1/edge/ev?league=nba&sourceType=all',
-    healthPath: '/v1/edge/ev?league=nba&sourceType=all&limit=5',
+    healthPath: '/v1/edge/ev?league=nba&sourceType=all&limit=3',
     tier: 'pro',
   },
   {
@@ -137,7 +148,7 @@ export const API_ENDPOINTS = [
     label: 'Arbitrage',
     method: 'GET',
     path: '/v1/edge/arbitrage?league=nba&sourceType=all',
-    healthPath: '/v1/edge/arbitrage?league=nba&sourceType=all&limit=5',
+    healthPath: '/v1/edge/arbitrage?league=nba&sourceType=all&limit=3',
     tier: 'pro',
   },
 
@@ -145,10 +156,10 @@ export const API_ENDPOINTS = [
   {
     id: 'players_trending',
     category: 'Player Analysis',
-    label: 'Trending Players',
+    label: 'Trending Players (NBA)',
     method: 'GET',
     path: '/v1/players/trending?league=nba&market=player_points&sortBy=l5',
-    healthPath: '/v1/players/trending?league=nba&market=player_points&sortBy=l5&limit=5',
+    healthPath: '/v1/players/trending?league=nba&market=player_points&sortBy=l5&limit=3',
     tier: 'pro',
   },
   {
@@ -157,7 +168,7 @@ export const API_ENDPOINTS = [
     label: 'Trending Players (NHL)',
     method: 'GET',
     path: '/v1/players/trending?league=nhl&market=player_shots_on_goal&sortBy=l5',
-    healthPath: '/v1/players/trending?league=nhl&market=player_shots_on_goal&sortBy=l5&limit=5',
+    healthPath: '/v1/players/trending?league=nhl&market=player_shots_on_goal&sortBy=l5&limit=3',
     tier: 'pro',
   },
   {
@@ -183,19 +194,19 @@ export const API_ENDPOINTS = [
   {
     id: 'best_bets',
     category: 'Best Bets',
-    label: 'Best Bets',
-    method: 'GET',
-    path: '/v1/best-bets?league=nfl',
-    healthPath: '/v1/best-bets?league=nfl',
-    tier: 'pro',
-  },
-  {
-    id: 'best_bets_nba',
-    category: 'Best Bets',
     label: 'Best Bets (NBA)',
     method: 'GET',
     path: '/v1/best-bets?league=nba',
     healthPath: '/v1/best-bets?league=nba',
+    tier: 'pro',
+  },
+  {
+    id: 'best_bets_nhl',
+    category: 'Best Bets',
+    label: 'Best Bets (NHL)',
+    method: 'GET',
+    path: '/v1/best-bets?league=nhl',
+    healthPath: '/v1/best-bets?league=nhl',
     tier: 'pro',
   },
 ]

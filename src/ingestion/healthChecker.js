@@ -47,12 +47,14 @@ async function checkEndpoint(endpoint) {
     try { parsed = JSON.parse(text) } catch { /* non-JSON */ }
 
     if (!res.ok) {
+      const apiMsg = parsed?.error?.message || parsed?.message || null
       return {
         endpointId: endpoint.id,
         status: 'fail',
         statusCode: res.status,
         responseTimeMs: ms,
-        error: parsed?.error?.message || `HTTP ${res.status}`,
+        error: `HTTP ${res.status}${apiMsg ? ': ' + apiMsg : ''}`,
+        errorDetail: text.slice(0, 500),
         checkedAt: new Date(),
       }
     }
@@ -63,21 +65,36 @@ async function checkEndpoint(endpoint) {
       (Array.isArray(data) && data.length === 0) ||
       (typeof data === 'object' && !Array.isArray(data) && Object.keys(data).length === 0)
 
+    // Include data count for debugging
+    const dataCount = Array.isArray(data) ? data.length
+      : (data?.odds?.length ?? data?.players?.length ?? data?.teams?.length ?? null)
+
     return {
       endpointId: endpoint.id,
       status: isEmpty ? 'empty' : 'ok',
       statusCode: res.status,
       responseTimeMs: ms,
-      error: null,
+      error: isEmpty ? 'Response returned empty data' : null,
+      dataCount,
       checkedAt: new Date(),
     }
   } catch (err) {
+    const ms = Date.now() - start
+    let errorMsg = String(err.message)
+    if (err.name === 'TimeoutError') {
+      errorMsg = `Request timed out after ${Math.round(ms / 1000)}s — endpoint too slow`
+    } else if (err.code === 'ECONNREFUSED') {
+      errorMsg = `Connection refused at ${url} — is the server running?`
+    } else if (err.code === 'ECONNRESET') {
+      errorMsg = `Connection reset — server may have crashed during request`
+    }
+
     return {
       endpointId: endpoint.id,
       status: 'fail',
       statusCode: null,
-      responseTimeMs: Date.now() - start,
-      error: err.name === 'TimeoutError' ? 'Request timed out (15s)' : String(err.message),
+      responseTimeMs: ms,
+      error: errorMsg,
       checkedAt: new Date(),
     }
   }
@@ -110,6 +127,15 @@ export async function runHealthChecks() {
     acc[r.status] = (acc[r.status] || 0) + 1
     return acc
   }, {})
+
+  // Log details for failures
+  const failures = results.filter((r) => r.status === 'fail')
+  if (failures.length > 0) {
+    console.log(`[health] Failures:`)
+    for (const f of failures) {
+      console.log(`  ${f.endpointId}: ${f.error} (${f.responseTimeMs}ms)`)
+    }
+  }
 
   console.log(`[health] Checks complete — ok:${counts.ok || 0} empty:${counts.empty || 0} fail:${counts.fail || 0} skip:${counts.skip || 0}`)
   return results
