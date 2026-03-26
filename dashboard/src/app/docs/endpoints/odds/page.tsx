@@ -68,23 +68,30 @@ export default function OddsEndpointsPage() {
         ]}
         response={`{
   "success": true,
-  "data": {
-    "total": 86,
-    "page": 1,
-    "pages": 4,
-    "odds": [
-      {
-        "eventId": "nba-ev-311286",
-        "homeTeam": "Boston Celtics",
-        "awayTeam": "Los Angeles Lakers",
-        "market": "moneyline",
-        "bookmakers": [
-          { "key": "draftkings", "name": "DraftKings", "home": -180, "away": 155 },
-          { "key": "fanduel", "name": "FanDuel", "home": -175, "away": 150 }
-        ]
-      }
-    ]
-  }
+  "data": [
+    {
+      "eventId": "nba-ev-311286",
+      "leagueId": "nba",
+      "sport": "basketball",
+      "bookmakers": [
+        {
+          "bookmakerId": "draftkings",
+          "bookmakerName": "DraftKings",
+          "sourceType": "sportsbook",
+          "markets": [
+            {
+              "marketType": "moneyline",
+              "outcomes": [
+                { "name": "Boston Celtics", "price": -180 },
+                { "name": "Los Angeles Lakers", "price": 155 }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "meta": { "count": 1, "page": 1 }
 }`}
       />
 
@@ -112,6 +119,8 @@ export default function OddsEndpointsPage() {
   "success": true,
   "data": {
     "eventId": "nba-ev-311286",
+    "leagueId": "nba",
+    "sport": "basketball",
     "summary": {
       "h2h": [
         { "name": "Boston Celtics", "fairOdds": -172, "bestOdds": -165, "avgOdds": -175 },
@@ -135,7 +144,8 @@ export default function OddsEndpointsPage() {
         ]
       }
     ]
-  }
+  },
+  "meta": { "league": "nba", "event": "nba-ev-311286" }
 }`}
       />
 
@@ -165,15 +175,13 @@ export default function OddsEndpointsPage() {
         ]}
         response={`{
   "success": true,
-  "data": {
-    "count": 3,
-    "bookmakers": [
-      { "bookmakerId": "draftkings", "name": "DraftKings", "sourceType": "sportsbook", "sourceRegion": "us" },
-      { "bookmakerId": "prizepicks", "name": "PrizePicks", "sourceType": "dfs", "sourceRegion": "us_dfs" },
-      { "bookmakerId": "espnbet", "name": "ESPN BET", "sourceType": "sportsbook", "sourceRegion": "us2" },
-      { "bookmakerId": "kalshi", "name": "Kalshi", "sourceType": "exchange", "sourceRegion": "us_ex" }
-    ]
-  }
+  "data": [
+    { "bookmakerId": "draftkings", "bookmakerName": "DraftKings", "sourceType": "sportsbook", "sourceRegion": "us" },
+    { "bookmakerId": "prizepicks", "bookmakerName": "PrizePicks", "sourceType": "dfs", "sourceRegion": "us_dfs" },
+    { "bookmakerId": "espnbet", "bookmakerName": "ESPN BET", "sourceType": "sportsbook", "sourceRegion": "us2" },
+    { "bookmakerId": "kalshi", "bookmakerName": "Kalshi", "sourceType": "exchange", "sourceRegion": "us_ex" }
+  ],
+  "meta": { "count": 4 }
 }`}
       />
     </div>

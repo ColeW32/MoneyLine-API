@@ -174,6 +174,35 @@ const ENDPOINTS = [
   }
 }`,
   },
+  {
+    method: 'GET',
+    path: '/v1/best-bets',
+    label: 'Best available prices by market',
+    example: `GET  /v1/best-bets?league=nba&market=moneyline
+
+// Response
+{
+  "success": true,
+  "data": [
+    {
+      "eventId": "nba-ev-311286",
+      "leagueId": "nba",
+      "sport": "basketball",
+      "calculatedAt": "2026-03-26T14:05:00.000Z",
+      "markets": [
+        {
+          "marketType": "moneyline",
+          "outcomes": [
+            { "name": "Boston Celtics", "price": -165, "bookmakerName": "FanDuel", "sourceType": "sportsbook" },
+            { "name": "Los Angeles Lakers", "price": 155, "bookmakerName": "DraftKings", "sourceType": "sportsbook" }
+          ]
+        }
+      ]
+    }
+  ],
+  "meta": { "count": 1, "page": 1 }
+}`,
+  },
 ]
 
 const TICKER_ITEMS = [
@@ -314,10 +343,10 @@ export default function LandingPage() {
       <section className="py-10 sm:py-16 border-b border-[#e0e0e0]">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
           {[
-            { num: 'US', label: 'Sportsbooks + DFS + Exchanges' },
-            { num: '12', label: 'Leagues covered' },
-            { num: '<50', label: 'ms latency' },
-            { num: '99.9%', label: 'Uptime' },
+            { num: '36', label: 'Public API endpoints' },
+            { num: '4', label: 'Major leagues covered' },
+            { num: '3', label: 'Venue types normalized' },
+            { num: '1', label: 'Canonical event ID across feeds' },
           ].map((s) => (
             <div key={s.label}>
               <p className="text-[40px] sm:text-[56px] font-extrabold ml-text tabular-nums">{s.num}</p>
@@ -343,15 +372,47 @@ export default function LandingPage() {
               { title: 'Dedicated Player Props', desc: 'Browse player props by event, player, market, and line using the same event IDs returned by events and odds.' },
               { title: 'Arbitrage Detection', desc: 'Real-time arb scanning across all books. We find the edges so you don\u2019t have to.' },
               { title: 'Expected Value', desc: 'Pre-computed +EV signals using consensus probability models across the full market.' },
+              { title: 'Best Bets Feed', desc: 'Pre-ranked best prices by event and market for recommendation rails, game cards, and Juiced-style surfaced picks.' },
               { title: 'Live Scores', desc: 'Real-time scores with period breakdowns, game clocks, and play-by-play data.' },
               { title: 'Rosters & Injuries', desc: 'Full team rosters with active injury reports updated throughout the day.' },
-              { title: 'Standings & Stats', desc: 'Complete standings, player stats, and team stats for every league we cover.' },
+              { title: 'Player Discovery APIs', desc: 'Trending players, hit rates, and integrated player analysis endpoints for B2C discovery and detail pages.' },
+              { title: 'Standings & Stats', desc: 'Complete standings, player stats, and team stats for every supported league.' },
             ].map((f) => (
               <div key={f.title} className="bg-white border border-[#e0e0e0] rounded-[10px] p-5">
                 <h3 className="text-[15px] font-bold ml-text">{f.title}</h3>
                 <p className="text-sm ml-text-muted mt-2 leading-relaxed">{f.desc}</p>
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="py-10 sm:py-16 lg:py-20 border-t border-[#e0e0e0] bg-white/70">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6">
+          <div className="grid grid-cols-1 lg:grid-cols-[1.2fr_0.8fr] gap-8 items-start">
+            <div>
+              <p className="text-[11px] font-medium ml-text-gray uppercase tracking-[0.2em]">Juiced B2C Readiness</p>
+              <h2 className="text-2xl min-[480px]:text-3xl sm:text-4xl font-bold tracking-tight leading-[1.15] ml-text mt-3">
+                Built for consumer betting surfaces, not just raw data exports.
+              </h2>
+              <p className="text-[15px] sm:text-base ml-text-muted mt-4 max-w-2xl">
+                Use canonical event IDs to connect event listings, game odds, dedicated player props, edge signals,
+                best bets, and player analysis in one UI flow without stitching providers together yourself.
+              </p>
+            </div>
+
+            <div className="grid gap-3">
+              {[
+                'Events -> Odds -> Player Props all share the same MoneyLine eventId.',
+                'Best Bets and Edge feeds are ready for featured cards, rails, and alerts.',
+                'Trending players, hit rates, and player analysis support discovery and detail pages.',
+                'Teams, rosters, injuries, schedules, and standings cover the supporting content layer.',
+              ].map((item) => (
+                <div key={item} className="rounded-xl border border-[#e0e0e0] bg-[#f5f2eb]/70 px-4 py-3 text-sm leading-relaxed ml-text-muted">
+                  {item}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </section>

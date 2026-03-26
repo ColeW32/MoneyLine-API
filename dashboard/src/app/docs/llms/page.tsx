@@ -113,7 +113,7 @@ export default function LlmsPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           {[
             'Authentication setup',
-            'All 26 API endpoints',
+            'All 36 public API endpoints',
             'Query parameters & types',
             'Response shapes with examples',
             'Sportsbook, DFS, and exchange catalog',

@@ -20,6 +20,7 @@ const SECTIONS = [
       { label: 'Odds', href: '/docs/endpoints/odds', tier: 'Starter+' },
       { label: 'Player Props', href: '/docs/endpoints/player-props', tier: 'Starter+' },
       { label: 'Edge Data', href: '/docs/endpoints/edge', tier: 'Pro+' },
+      { label: 'Best Bets', href: '/docs/endpoints/best-bets', tier: 'Pro+' },
     ],
   },
   {

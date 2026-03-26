@@ -43,13 +43,11 @@ export default function LeaguesEndpointsPage() {
         ]}
         response={`{
   "success": true,
-  "data": {
-    "count": 4,
-    "leagues": [
-      { "leagueId": "nba", "name": "NBA", "sport": "basketball" },
-      { "leagueId": "nfl", "name": "NFL", "sport": "football" }
-    ]
-  }
+  "data": [
+    { "leagueId": "nba", "name": "NBA", "sport": "basketball" },
+    { "leagueId": "nfl", "name": "NFL", "sport": "football" }
+  ],
+  "meta": { "count": 2 }
 }`}
       />
 

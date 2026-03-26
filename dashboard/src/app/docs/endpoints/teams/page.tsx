@@ -21,6 +21,27 @@ export default function TeamsPlayersPage() {
 
       <EndpointCard
         method="GET"
+        path="/v1/teams"
+        description="List all teams, optionally filtered by league."
+        params={[
+          { name: 'league', type: 'string', required: false, description: 'Optional league filter such as nba or nfl' },
+        ]}
+        response={`{
+  "success": true,
+  "data": [
+    {
+      "teamId": "nba-lal",
+      "name": "Los Angeles Lakers",
+      "abbreviation": "LAL",
+      "leagueId": "nba"
+    }
+  ],
+  "meta": { "count": 1, "league": "nba" }
+}`}
+      />
+
+      <EndpointCard
+        method="GET"
         path="/v1/leagues/:leagueId/teams"
         description="List all teams in a league."
         params={[
@@ -28,20 +49,21 @@ export default function TeamsPlayersPage() {
         ]}
         response={`{
   "success": true,
-  "data": {
-    "teams": [
-      {
-        "teamId": "team_nba_lal",
-        "name": "Los Angeles Lakers",
-        "abbreviation": "LAL"
-      },
-      {
-        "teamId": "team_nba_bos",
-        "name": "Boston Celtics",
-        "abbreviation": "BOS"
-      }
-    ]
-  }
+  "data": [
+    {
+      "teamId": "nba-lal",
+      "name": "Los Angeles Lakers",
+      "abbreviation": "LAL",
+      "leagueId": "nba"
+    },
+    {
+      "teamId": "nba-bos",
+      "name": "Boston Celtics",
+      "abbreviation": "BOS",
+      "leagueId": "nba"
+    }
+  ],
+  "meta": { "league": "nba", "count": 2 }
 }`}
       />
 
@@ -64,21 +86,24 @@ export default function TeamsPlayersPage() {
         response={`{
   "success": true,
   "data": {
+    "teamId": "nba-lal",
+    "leagueId": "nba",
     "players": [
       {
-        "playerId": "player_lj23",
+        "playerId": "nba-p-2544",
         "name": "LeBron James",
         "position": "SF",
         "number": 23
       },
       {
-        "playerId": "player_ad3",
+        "playerId": "nba-p-203076",
         "name": "Anthony Davis",
         "position": "PF",
         "number": 3
       }
     ]
-  }
+  },
+  "meta": { "league": "nba", "team": "nba-lal" }
 }`}
       />
 
@@ -93,6 +118,8 @@ export default function TeamsPlayersPage() {
         response={`{
   "success": true,
   "data": {
+    "teamId": "nba-lal",
+    "leagueId": "nba",
     "players": [
       {
         "name": "Anthony Davis",
@@ -110,7 +137,8 @@ export default function TeamsPlayersPage() {
         "injury": "Left ankle sprain"
       }
     ]
-  }
+  },
+  "meta": { "league": "nba", "team": "nba-lal" }
 }`}
       />
 
@@ -135,6 +163,31 @@ export default function TeamsPlayersPage() {
 
       {/* ---- Players ---- */}
       <h2 className="text-xl font-semibold text-[#1a1a1a] mt-10 mb-1">Players</h2>
+
+      <EndpointCard
+        method="GET"
+        path="/v1/players"
+        description="List players, optionally filtered by league or team."
+        params={[
+          { name: 'league', type: 'string', required: false, description: 'Optional league filter such as nba or nfl' },
+          { name: 'team', type: 'string', required: false, description: 'Optional teamId filter' },
+          { name: 'limit', type: 'number', required: false, description: 'Max 100, default 50' },
+          { name: 'page', type: 'number', required: false, description: 'Page number, default 1' },
+        ]}
+        response={`{
+  "success": true,
+  "data": [
+    {
+      "playerId": "nba-p-2544",
+      "playerName": "LeBron James",
+      "teamId": "nba-lal",
+      "leagueId": "nba",
+      "position": "SF"
+    }
+  ],
+  "meta": { "count": 1, "total": 1, "page": 1, "pages": 1, "league": "nba" }
+}`}
+      />
 
       <EndpointCard
         method="GET"

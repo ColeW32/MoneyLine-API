@@ -56,7 +56,8 @@ export default function DocsPage() {
       <p className="text-[15px] text-[#4a4a4a] leading-relaxed mb-4">
         MoneyLine provides a comprehensive sports data platform covering four
         major leagues. Here is what you can access, including daily player stat
-        updates for season summaries and event-linked game logs:
+        updates for season summaries, event-linked game logs, and discovery-ready
+        player analysis:
       </p>
 
       <div className="grid sm:grid-cols-2 gap-3">
@@ -86,6 +87,10 @@ export default function DocsPage() {
             detail: 'Daily-refreshed player stats by season, exact event, exact date, or date range.',
           },
           {
+            label: 'Best Bets & Discovery Feeds',
+            detail: 'Best line surfaces plus trending-player and hit-rate endpoints for B2C integrations.',
+          },
+          {
             label: 'Injury Reports',
             detail: 'Up-to-date injury designations and return timelines.',
           },
@@ -111,8 +116,9 @@ export default function DocsPage() {
         <strong className="font-medium text-[#1a1a1a]">Events</strong>,{' '}
         <strong className="font-medium text-[#1a1a1a]">Odds</strong>,{' '}
         <strong className="font-medium text-[#1a1a1a]">Player Props</strong>, and{' '}
-        <strong className="font-medium text-[#1a1a1a]">Edge</strong> sections for
-        the core data endpoints.
+        <strong className="font-medium text-[#1a1a1a]">Edge</strong> and{' '}
+        <strong className="font-medium text-[#1a1a1a]">Best Bets</strong> sections
+        for the core data endpoints and recommendation surfaces.
       </p>
     </div>
   )

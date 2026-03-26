@@ -225,6 +225,25 @@ Get current standings for a league.
 
 ### Teams & Players
 
+#### GET /v1/teams
+List all teams, optionally filtered by league.
+
+**Tier:** Free
+**Params:** `?league=nba`
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": [
+    { "teamId": "nba-bos", "name": "Boston Celtics", "abbreviation": "BOS", "leagueId": "nba" }
+  ],
+  "meta": { "count": 1, "league": "nba" }
+}
+```
+
+---
+
 #### GET /v1/leagues/:leagueId/teams
 List all teams in a league.
 
@@ -280,6 +299,37 @@ Get aggregated stats for a team.
 Get the schedule (past and upcoming) for a team.
 
 **Tier:** Free
+
+---
+
+#### GET /v1/players
+List players, optionally filtered by league or team.
+
+**Tier:** Free
+**Params:**
+| Param | Type | Default | Description |
+|-------|------|---------|-------------|
+| league | string | — | Filter by league ID |
+| team | string | — | Filter by team ID |
+| limit | number | 50 | Max 100 |
+| page | number | 1 | Page number |
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "playerId": "nba-p-2544",
+      "playerName": "LeBron James",
+      "teamId": "nba-lal",
+      "leagueId": "nba",
+      "position": "SF"
+    }
+  ],
+  "meta": { "count": 1, "total": 1, "page": 1, "pages": 1, "league": "nba" }
+}
+```
 
 ---
 

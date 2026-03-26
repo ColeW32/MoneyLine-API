@@ -23,23 +23,19 @@ export default function EventsEndpointsPage() {
         ]}
         response={`{
   "success": true,
-  "data": {
-    "total": 142,
-    "page": 1,
-    "pages": 6,
-    "events": [
-      {
-        "eventId": "nba-ev-311286",
-        "leagueId": "nba",
-        "sport": "basketball",
-        "homeTeamName": "Boston Celtics",
-        "awayTeamName": "Los Angeles Lakers",
-        "startTime": "2026-03-09T23:30:00.000Z",
-        "status": "final",
-        "scores": { "home": 112, "away": 105 }
-      }
-    ]
-  }
+  "data": [
+    {
+      "eventId": "nba-ev-311286",
+      "leagueId": "nba",
+      "sport": "basketball",
+      "homeTeamName": "Boston Celtics",
+      "awayTeamName": "Los Angeles Lakers",
+      "startTime": "2026-03-09T23:30:00.000Z",
+      "status": "final",
+      "scores": { "home": 112, "away": 105 }
+    }
+  ],
+  "meta": { "count": 1, "total": 142, "page": 1, "pages": 6 }
 }`}
       />
 
@@ -80,22 +76,19 @@ export default function EventsEndpointsPage() {
         ]}
         response={`{
   "success": true,
-  "data": {
-    "date": "2026-03-18",
-    "count": 14,
-    "events": [
-      {
-        "eventId": "nba-ev-311310",
-        "leagueId": "nba",
-        "sport": "basketball",
-        "homeTeamName": "Miami Heat",
-        "awayTeamName": "Chicago Bulls",
-        "startTime": "2026-03-18T23:30:00.000Z",
-        "status": "scheduled",
-        "scores": null
-      }
-    ]
-  }
+  "data": [
+    {
+      "eventId": "nba-ev-311310",
+      "leagueId": "nba",
+      "sport": "basketball",
+      "homeTeamName": "Miami Heat",
+      "awayTeamName": "Chicago Bulls",
+      "startTime": "2026-03-18T23:30:00.000Z",
+      "status": "scheduled",
+      "scores": null
+    }
+  ],
+  "meta": { "count": 14, "date": "2026-03-18" }
 }`}
       />
 
