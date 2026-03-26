@@ -180,16 +180,81 @@ export default async function oddsRoutes(fastify) {
     const pageNum = Math.max(1, parseInt(page) || 1)
     const pageSize = Math.min(50, Math.max(1, parseInt(limit) || 25))
 
-    const odds = await getCollection('odds')
-      .find(filter, { projection: { _id: 0 } })
-      .sort({ fetchedAt: -1 })
-      .skip((pageNum - 1) * pageSize)
-      .limit(pageSize)
-      .toArray()
+    // Use aggregation pipeline to filter bookmakers/markets server-side
+    // instead of transferring full multi-MB documents
+    const pipeline = [
+      { $match: filter },
+      { $sort: { fetchedAt: -1 } },
+      { $skip: (pageNum - 1) * pageSize },
+      { $limit: pageSize },
+    ]
 
-    for (const o of odds) {
-      o.bookmakers = filterBookmakersForOddsResponse(o.bookmakers, { sourceType, bookmaker, market })
+    // Server-side sourceType filtering
+    if (sourceType && sourceType !== 'all') {
+      pipeline.push({
+        $set: {
+          bookmakers: {
+            $filter: {
+              input: '$bookmakers',
+              as: 'bk',
+              cond: { $eq: ['$$bk.sourceType', sourceType] },
+            },
+          },
+        },
+      })
     }
+
+    // Server-side bookmaker name filtering
+    if (bookmaker) {
+      const normalized = bookmaker.toLowerCase()
+      pipeline.push({
+        $set: {
+          bookmakers: {
+            $filter: {
+              input: '$bookmakers',
+              as: 'bk',
+              cond: {
+                $or: [
+                  { $eq: [{ $toLower: '$$bk.bookmakerName' }, normalized] },
+                  { $eq: [{ $toLower: '$$bk.bookmakerId' }, normalized] },
+                ],
+              },
+            },
+          },
+        },
+      })
+    }
+
+    // Server-side market filtering within each bookmaker
+    if (market) {
+      pipeline.push({
+        $set: {
+          bookmakers: {
+            $map: {
+              input: '$bookmakers',
+              as: 'bk',
+              in: {
+                bookmakerId: '$$bk.bookmakerId',
+                bookmakerName: '$$bk.bookmakerName',
+                sourceType: '$$bk.sourceType',
+                sourceRegion: '$$bk.sourceRegion',
+                markets: {
+                  $filter: {
+                    input: '$$bk.markets',
+                    as: 'm',
+                    cond: { $eq: ['$$m.marketType', market] },
+                  },
+                },
+              },
+            },
+          },
+        },
+      })
+    }
+
+    pipeline.push({ $project: { _id: 0 } })
+
+    const odds = await getCollection('odds').aggregate(pipeline).toArray()
 
     for (const o of odds) {
       o.bookmakers = applyBooksPerRequestLimit(o.bookmakers, request.tierConfig.booksPerRequest)

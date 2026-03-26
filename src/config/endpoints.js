@@ -178,6 +178,7 @@ export const API_ENDPOINTS = [
     method: 'GET',
     path: '/v1/players/{playerId}/hit-rates?market=player_points&line=14.5',
     healthPath: null,
+    healthPathTemplate: '/v1/players/{playerId}/hit-rates?market=player_points&line=14.5',
     tier: 'pro',
   },
   {
@@ -187,6 +188,7 @@ export const API_ENDPOINTS = [
     method: 'GET',
     path: '/v1/players/{playerId}/analysis?market=player_points&window=l5',
     healthPath: null,
+    healthPathTemplate: '/v1/players/{playerId}/analysis?market=player_points&window=l5',
     tier: 'pro',
   },
 

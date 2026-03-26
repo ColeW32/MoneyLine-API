@@ -5,6 +5,50 @@ const API_BASE = process.env.API_BASE_URL || `http://localhost:${process.env.API
 const HEALTH_API_KEY = process.env.ML_LIVE_API_KEY
 
 /**
+ * Resolve a sample playerId from the hit_rates collection for dynamic health checks.
+ * Falls back to player_stats if no hit_rates exist yet.
+ */
+let _cachedPlayerId = null
+async function resolveSamplePlayerId() {
+  if (_cachedPlayerId) return _cachedPlayerId
+
+  // Try hit_rates first (most relevant)
+  const hitRate = await getCollection('hit_rates').findOne(
+    {},
+    { projection: { playerId: 1 } }
+  )
+  if (hitRate?.playerId) {
+    _cachedPlayerId = hitRate.playerId
+    return _cachedPlayerId
+  }
+
+  // Fallback to player_stats
+  const stat = await getCollection('player_stats').findOne(
+    { type: 'game' },
+    { projection: { playerId: 1 } }
+  )
+  if (stat?.playerId) {
+    _cachedPlayerId = stat.playerId
+    return _cachedPlayerId
+  }
+
+  return null
+}
+
+/**
+ * Resolve the health path for an endpoint, handling dynamic {playerId} substitution.
+ */
+async function resolveHealthPath(endpoint) {
+  if (endpoint.healthPath) return endpoint.healthPath
+  if (!endpoint.healthPathTemplate) return null
+
+  const playerId = await resolveSamplePlayerId()
+  if (!playerId) return null
+
+  return endpoint.healthPathTemplate.replace('{playerId}', playerId)
+}
+
+/**
  * Check a single endpoint and return a result object.
  */
 async function checkEndpoint(endpoint) {
@@ -19,18 +63,19 @@ async function checkEndpoint(endpoint) {
     }
   }
 
-  if (!endpoint.healthPath) {
+  const healthPath = await resolveHealthPath(endpoint)
+  if (!healthPath) {
     return {
       endpointId: endpoint.id,
       status: 'skip',
       statusCode: null,
       responseTimeMs: 0,
-      error: 'No healthPath configured (requires dynamic ID)',
+      error: 'No healthPath configured and no sample playerId found',
       checkedAt: new Date(),
     }
   }
 
-  const url = `${API_BASE}${endpoint.healthPath}`
+  const url = `${API_BASE}${healthPath}`
   const start = Date.now()
 
   try {
