@@ -162,10 +162,30 @@ export default async function playerPropsRoutes(fastify) {
     const { eventId } = request.params
     const { market, player, playerId, bookmaker, sourceType } = request.query
 
-    const doc = await getCollection('player_props').findOne(
-      { eventId },
-      { projection: { _id: 0, marketTypes: 0, playerNames: 0 } }
-    )
+    // Use aggregation pipeline to filter heavy nested data server-side
+    // Player props docs can be 5-10MB with 50+ players × 15+ markets × many lines
+    const pipeline = [
+      { $match: { eventId } },
+      { $project: {
+        _id: 0, eventId: 1, leagueId: 1, sport: 1, fetchedAt: 1,
+        players: {
+          $map: {
+            input: '$players',
+            as: 'p',
+            in: {
+              playerName: '$$p.playerName',
+              playerId: '$$p.playerId',
+              markets: market
+                ? { $filter: { input: '$$p.markets', as: 'm', cond: { $eq: ['$$m.marketType', market] } } }
+                : '$$p.markets',
+            },
+          },
+        },
+      }},
+    ]
+
+    const docs = await getCollection('player_props').aggregate(pipeline).toArray()
+    const doc = docs[0] || null
 
     if (!doc) {
       return reply.code(404).send(error(`Player props for event '${eventId}' not found.`, 404))

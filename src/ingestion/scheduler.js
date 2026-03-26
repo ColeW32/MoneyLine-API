@@ -15,6 +15,7 @@ import { fetchOdds, fetchEventOdds } from './fetchers/oddsApi.js'
 import { getNormalizer } from './normalizers/index.js'
 import { calculateEdges } from './edgeCalculator.js'
 import { calculateBestBets } from './bestBetsCalculator.js'
+import { calculateHitRates } from './hitRateCalculator.js'
 import { buildSeasonDoc } from './normalizers/shared.js'
 import { bookmakerSortComparator } from './bookmakerCatalog.js'
 import { buildPlayerPropsDocFromOddsDoc } from '../utils/playerProps.js'
@@ -1159,6 +1160,7 @@ async function jobOdds(config) {
 
   await calculateEdges(config.leagueId, config.sport)
   await calculateBestBets(config.leagueId, config.sport)
+  await calculateHitRates(config.leagueId)
 }
 
 // --- Schedule setup ---

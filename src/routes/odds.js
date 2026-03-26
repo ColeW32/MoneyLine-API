@@ -146,15 +146,52 @@ export function applyBooksPerRequestLimit(bookmakers = [], booksAllowed = Infini
 }
 
 export default async function oddsRoutes(fastify) {
+  // Core game-level market types (player props have their own endpoint)
+  const GAME_MARKETS = ['moneyline', 'spread', 'total']
+
   // GET /v1/events/:eventId/odds (starter+)
   fastify.get('/v1/events/:eventId/odds', async (request, reply) => {
     const { eventId } = request.params
-    const { sourceType } = request.query
+    const { sourceType, market } = request.query
 
-    const odds = await getCollection('odds').findOne(
-      { eventId },
-      { projection: { _id: 0 }, sort: { fetchedAt: -1 } }
-    )
+    // Use aggregation to filter markets server-side (odds docs embed player props too)
+    const marketFilter = market
+      ? { $eq: ['$$m.marketType', market] }
+      : { $in: ['$$m.marketType', GAME_MARKETS] }
+
+    const pipeline = [
+      { $match: { eventId } },
+      { $sort: { fetchedAt: -1 } },
+      { $limit: 1 },
+      {
+        $set: {
+          bookmakers: {
+            $map: {
+              input: '$bookmakers',
+              as: 'bk',
+              in: {
+                $mergeObjects: [
+                  '$$bk',
+                  {
+                    markets: {
+                      $filter: {
+                        input: '$$bk.markets',
+                        as: 'm',
+                        cond: marketFilter,
+                      },
+                    },
+                  },
+                ],
+              },
+            },
+          },
+        },
+      },
+      { $project: { _id: 0 } },
+    ]
+
+    const docs = await getCollection('odds').aggregate(pipeline).toArray()
+    const odds = docs[0] || null
 
     if (!odds) {
       return reply.code(404).send(error(`Odds for event '${eventId}' not found.`, 404))
@@ -180,8 +217,9 @@ export default async function oddsRoutes(fastify) {
     const pageNum = Math.max(1, parseInt(page) || 1)
     const pageSize = Math.min(50, Math.max(1, parseInt(limit) || 25))
 
-    // Use aggregation pipeline to filter bookmakers/markets server-side
-    // instead of transferring full multi-MB documents
+    // Use aggregation pipeline to filter heavy nested data server-side.
+    // Odds docs embed all markets including player props (50+ market types),
+    // making raw documents 5-10MB. Default to game-level markets only.
     const pipeline = [
       { $match: filter },
       { $sort: { fetchedAt: -1 } },
@@ -225,33 +263,36 @@ export default async function oddsRoutes(fastify) {
       })
     }
 
-    // Server-side market filtering within each bookmaker
-    if (market) {
-      pipeline.push({
-        $set: {
-          bookmakers: {
-            $map: {
-              input: '$bookmakers',
-              as: 'bk',
-              in: {
-                $mergeObjects: [
-                  '$$bk',
-                  {
-                    markets: {
-                      $filter: {
-                        input: '$$bk.markets',
-                        as: 'm',
-                        cond: { $eq: ['$$m.marketType', market] },
-                      },
+    // Server-side market filtering — filter to specific market or default to game-level only.
+    // Player prop markets are served via /v1/player-props which has its own optimized pipeline.
+    const marketFilter = market
+      ? { $eq: ['$$m.marketType', market] }
+      : { $in: ['$$m.marketType', GAME_MARKETS] }
+
+    pipeline.push({
+      $set: {
+        bookmakers: {
+          $map: {
+            input: '$bookmakers',
+            as: 'bk',
+            in: {
+              $mergeObjects: [
+                '$$bk',
+                {
+                  markets: {
+                    $filter: {
+                      input: '$$bk.markets',
+                      as: 'm',
+                      cond: marketFilter,
                     },
                   },
-                ],
-              },
+                },
+              ],
             },
           },
         },
-      })
-    }
+      },
+    })
 
     pipeline.push({ $project: { _id: 0 } })
 

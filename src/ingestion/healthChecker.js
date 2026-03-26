@@ -190,7 +190,7 @@ export async function runHealthChecks() {
   _cachedPlayerId = null
   _cachedEventId = null
 
-  const BATCH_SIZE = 4
+  const BATCH_SIZE = 3
   const results = []
   for (let i = 0; i < API_ENDPOINTS.length; i += BATCH_SIZE) {
     const batch = API_ENDPOINTS.slice(i, i + BATCH_SIZE)
