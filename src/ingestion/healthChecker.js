@@ -5,14 +5,15 @@ const API_BASE = process.env.API_BASE_URL || `http://localhost:${process.env.API
 const HEALTH_API_KEY = process.env.ML_LIVE_API_KEY
 
 /**
- * Resolve a sample playerId from the hit_rates collection for dynamic health checks.
- * Falls back to player_stats if no hit_rates exist yet.
+ * Resolve dynamic IDs for health checks by querying real data.
+ * Cached per health check run to avoid repeated DB lookups.
  */
 let _cachedPlayerId = null
+let _cachedEventId = null
+
 async function resolveSamplePlayerId() {
   if (_cachedPlayerId) return _cachedPlayerId
 
-  // Try hit_rates first (most relevant)
   const hitRate = await getCollection('hit_rates').findOne(
     {},
     { projection: { playerId: 1 } }
@@ -22,7 +23,6 @@ async function resolveSamplePlayerId() {
     return _cachedPlayerId
   }
 
-  // Fallback to player_stats
   const stat = await getCollection('player_stats').findOne(
     { type: 'game' },
     { projection: { playerId: 1 } }
@@ -35,17 +35,54 @@ async function resolveSamplePlayerId() {
   return null
 }
 
+async function resolveSampleEventId() {
+  if (_cachedEventId) return _cachedEventId
+
+  // Find a recent NBA event that has odds data (most representative)
+  const odds = await getCollection('odds').findOne(
+    { leagueId: 'nba' },
+    { projection: { eventId: 1 }, sort: { fetchedAt: -1 } }
+  )
+  if (odds?.eventId) {
+    _cachedEventId = odds.eventId
+    return _cachedEventId
+  }
+
+  // Fallback to any event
+  const event = await getCollection('events').findOne(
+    {},
+    { projection: { eventId: 1 }, sort: { startTime: -1 } }
+  )
+  if (event?.eventId) {
+    _cachedEventId = event.eventId
+    return _cachedEventId
+  }
+
+  return null
+}
+
 /**
- * Resolve the health path for an endpoint, handling dynamic {playerId} substitution.
+ * Resolve the health path for an endpoint, handling dynamic {playerId} and {eventId} substitution.
  */
 async function resolveHealthPath(endpoint) {
   if (endpoint.healthPath) return endpoint.healthPath
   if (!endpoint.healthPathTemplate) return null
 
-  const playerId = await resolveSamplePlayerId()
-  if (!playerId) return null
+  let path = endpoint.healthPathTemplate
 
-  return endpoint.healthPathTemplate.replace('{playerId}', playerId)
+  if (path.includes('{playerId}')) {
+    const playerId = await resolveSamplePlayerId()
+    if (!playerId) return null
+    path = path.replace('{playerId}', playerId)
+  }
+
+  if (path.includes('{eventId}')) {
+    const eventId = await resolveSampleEventId()
+    if (!eventId) return null
+    path = path.replace('{eventId}', eventId)
+  }
+
+  return path
 }
 
 /**
@@ -149,6 +186,10 @@ async function checkEndpoint(endpoint) {
  * Run health checks in small batches to avoid overwhelming the server.
  */
 export async function runHealthChecks() {
+  // Clear cached IDs so each run resolves fresh data
+  _cachedPlayerId = null
+  _cachedEventId = null
+
   const BATCH_SIZE = 4
   const results = []
   for (let i = 0; i < API_ENDPOINTS.length; i += BATCH_SIZE) {
