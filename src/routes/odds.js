@@ -234,17 +234,18 @@ export default async function oddsRoutes(fastify) {
               input: '$bookmakers',
               as: 'bk',
               in: {
-                bookmakerId: '$$bk.bookmakerId',
-                bookmakerName: '$$bk.bookmakerName',
-                sourceType: '$$bk.sourceType',
-                sourceRegion: '$$bk.sourceRegion',
-                markets: {
-                  $filter: {
-                    input: '$$bk.markets',
-                    as: 'm',
-                    cond: { $eq: ['$$m.marketType', market] },
+                $mergeObjects: [
+                  '$$bk',
+                  {
+                    markets: {
+                      $filter: {
+                        input: '$$bk.markets',
+                        as: 'm',
+                        cond: { $eq: ['$$m.marketType', market] },
+                      },
+                    },
                   },
-                },
+                ],
               },
             },
           },
