@@ -5,6 +5,7 @@ import {
   toArray,
   normalizeFlatStats,
   getGameResult,
+  deriveEventOutcome,
   resolveEventIdFromScoreMatch,
   normalizeOdds as sharedNormalizeOdds,
   normalizePlayerStats as sharedNormalizePlayerStats,
@@ -109,6 +110,15 @@ export async function normalizeScores(raw) {
           away: parseInt(m.awayteam.totalscore) || 0,
           periods,
         },
+        ...deriveEventOutcome({
+          status: normalizeStatus(m.status),
+          homeTeamId: homeId,
+          awayTeamId: awayId,
+          homeTeamName: m.hometeam.name,
+          awayTeamName: m.awayteam.name,
+          homeScore: m.hometeam.totalscore,
+          awayScore: m.awayteam.totalscore,
+        }),
         sourceUpdatedAt: new Date(),
         updatedAt: new Date(),
       })

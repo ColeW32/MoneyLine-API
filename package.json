@@ -15,6 +15,7 @@
     "smoke:api": "node scripts/smokeApi.js",
     "indexes": "node scripts/createIndexes.js",
     "backfill:player-stats": "node scripts/backfillPlayerStats.js",
+    "backfill:event-outcomes": "node scripts/backfillEventOutcomes.js",
     "verify:player-stats": "node scripts/verifyPlayerStatsIntegrity.js"
   },
   "dependencies": {

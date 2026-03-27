@@ -153,6 +153,11 @@ List events with filtering and pagination.
 | limit | number | 25 | Max 100 |
 | page | number | 1 | Page number |
 
+Final events also include explicit outcome fields so clients do not need to derive winners from the raw scores:
+- `outcome`: `home_win`, `away_win`, or `draw`
+- `winnerTeamId`, `winnerTeamName`
+- `loserTeamId`, `loserTeamName`
+
 **Response:**
 ```json
 {
@@ -167,7 +172,12 @@ List events with filtering and pagination.
       "awayTeamName": "Los Angeles Lakers",
       "startTime": "2026-03-09T23:30:00.000Z",
       "status": "final",
-      "scores": { "home": 112, "away": 105 }
+      "scores": { "home": 112, "away": 105 },
+      "outcome": "home_win",
+      "winnerTeamId": "nba-bos",
+      "winnerTeamName": "Boston Celtics",
+      "loserTeamId": "nba-lal",
+      "loserTeamName": "Los Angeles Lakers"
     }
   ]
 }
@@ -198,6 +208,8 @@ Get full details for a single event.
 
 **Tier:** Free
 
+For final events, the response includes `outcome`, `winnerTeamId`, `winnerTeamName`, `loserTeamId`, and `loserTeamName`.
+
 ---
 
 #### GET /v1/events/:eventId/play-by-play
@@ -212,6 +224,8 @@ Get game scores for a league on a specific date.
 
 **Tier:** Free
 **Params:** `?date=2026-03-20` (defaults to today)
+
+Returned event objects use the same schema as `/v1/events`. When a game is final, each event also includes `outcome`, `winnerTeamId`, `winnerTeamName`, `loserTeamId`, and `loserTeamName`.
 
 ---
 

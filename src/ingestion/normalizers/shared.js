@@ -140,6 +140,42 @@ export function getGameResult(homeScore, awayScore, side) {
   return won ? 'W' : 'L'
 }
 
+export function deriveEventOutcome({
+  status,
+  homeTeamId,
+  awayTeamId,
+  homeTeamName,
+  awayTeamName,
+  homeScore,
+  awayScore,
+}) {
+  if (status !== 'final') return {}
+
+  const home = Number(homeScore)
+  const away = Number(awayScore)
+  if (!Number.isFinite(home) || !Number.isFinite(away)) return {}
+
+  if (home === away) {
+    return {
+      outcome: 'draw',
+      winnerTeamId: null,
+      winnerTeamName: null,
+      loserTeamId: null,
+      loserTeamName: null,
+    }
+  }
+
+  const homeWon = home > away
+
+  return {
+    outcome: homeWon ? 'home_win' : 'away_win',
+    winnerTeamId: homeWon ? homeTeamId : awayTeamId,
+    winnerTeamName: homeWon ? homeTeamName : awayTeamName,
+    loserTeamId: homeWon ? awayTeamId : homeTeamId,
+    loserTeamName: homeWon ? awayTeamName : homeTeamName,
+  }
+}
+
 /**
  * Normalize odds from The Odds API to MoneyLine schema.
  * Parameterized by leagueId and sport.
