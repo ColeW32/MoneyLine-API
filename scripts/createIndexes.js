@@ -66,6 +66,7 @@ async function createIndexes() {
     { playerId: 1, statType: 1, season: 1 },
     { unique: true, partialFilterExpression: { statType: 'season' } }
   )
+  await db.collection('player_stats').createIndex({ playerId: 1, statType: 1, gameDate: -1 })
   await db.collection('player_stats').createIndex({ playerId: 1, statType: 1, season: 1, gameDate: -1 })
   await db.collection('player_stats').createIndex({ teamId: 1, season: 1 })
   console.log('  - player_stats indexes created')

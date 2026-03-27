@@ -381,6 +381,7 @@ async function ensureCriticalPlayerStatsIndexes() {
   const playerStatsCollection = getCollection('player_stats')
   const playerGameIndexKey = { playerId: 1, statType: 1, eventId: 1 }
   const playerSeasonIndexKey = { playerId: 1, statType: 1, season: 1 }
+  const playerRecentGamesIndexKey = { playerId: 1, statType: 1, gameDate: -1 }
   const playerSeasonLookupIndexKey = { playerId: 1, statType: 1, season: 1, gameDate: -1 }
   const gamePartial = { statType: 'game' }
   const seasonPartial = { statType: 'season' }
@@ -425,6 +426,11 @@ async function ensureCriticalPlayerStatsIndexes() {
   const existingSeasonLookupIndex = findIndexByShape(existingPlayerStatsIndexes, playerSeasonLookupIndexKey)
   if (!existingSeasonLookupIndex) {
     await playerStatsCollection.createIndex(playerSeasonLookupIndexKey)
+  }
+
+  const existingRecentGamesIndex = findIndexByShape(existingPlayerStatsIndexes, playerRecentGamesIndexKey)
+  if (!existingRecentGamesIndex) {
+    await playerStatsCollection.createIndex(playerRecentGamesIndexKey)
   }
 
   await getCollection('source_id_map_v2').createIndex(

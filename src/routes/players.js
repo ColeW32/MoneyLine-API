@@ -1,4 +1,5 @@
 import { getCollection } from '../db.js'
+import { getRedis } from '../redis.js'
 import { getCurrentSeason, SPORTS } from '../config/sports.js'
 import { success, error } from '../utils/response.js'
 import {
@@ -8,6 +9,9 @@ import {
   sumStatFieldsForGame,
 } from '../ingestion/hitRateCalculator.js'
 import { americanToDecimal } from '../utils/odds.js'
+
+const PLAYER_TRENDS_CACHE_TTL_SECONDS = 300
+const PLAYER_TRENDS_CACHE_VERSION = 2
 
 function parseDateBoundary(value, endOfDay = false) {
   if (!value) return null
@@ -141,6 +145,17 @@ function buildMatchup(event, teamsById) {
 
   if (!away || !home) return null
   return `${away} @ ${home}`
+}
+
+function buildPlayerTrendsCacheKey({ league, windowSize, bookmaker, sourceType }) {
+  return [
+    'player-trends',
+    `v${PLAYER_TRENDS_CACHE_VERSION}`,
+    league || 'all',
+    `w${windowSize}`,
+    `b:${bookmaker || 'all'}`,
+    `s:${sourceType}`,
+  ].join(':')
 }
 
 export default async function playerRoutes(fastify) {
@@ -571,6 +586,34 @@ export default async function playerRoutes(fastify) {
     const pageNum = Math.max(1, parseInt(page, 10) || 1)
     const pageSize = Math.min(50, Math.max(1, parseInt(limit, 10) || 25))
     const normalizedBookmaker = bookmaker ? String(bookmaker).trim().toLowerCase() : null
+    const cacheKey = buildPlayerTrendsCacheKey({
+      league,
+      windowSize,
+      bookmaker: normalizedBookmaker,
+      sourceType,
+    })
+
+    const redis = getRedis()
+    const cached = await redis.get(cacheKey)
+    if (cached) {
+      const parsed = typeof cached === 'string' ? JSON.parse(cached) : cached
+      const results = Array.isArray(parsed?.results) ? parsed.results : []
+      const total = results.length
+      const paginated = results.slice((pageNum - 1) * pageSize, pageNum * pageSize)
+
+      return success(paginated, {
+        count: paginated.length,
+        total,
+        page: pageNum,
+        pages: Math.ceil(total / pageSize),
+        window: windowSize,
+        stake: 100,
+        ...(league && { league }),
+        ...(bookmaker && { bookmaker }),
+        sourceType,
+        cache: 'hit',
+      })
+    }
 
     const now = new Date()
     const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
@@ -605,32 +648,23 @@ export default async function playerRoutes(fastify) {
     const propDocs = await getCollection('player_props')
       .find(
         { eventId: { $in: [...eventMap.keys()] } },
-        { projection: { _id: 0, eventId: 1, leagueId: 1, fetchedAt: 1, players: 1 } }
+        { projection: { _id: 0, eventId: 1, leagueId: 1, players: 1 } }
       )
-      .sort({ fetchedAt: -1 })
       .toArray()
 
-    const latestPropDocs = []
-    const seenEventIds = new Set()
-    for (const doc of propDocs) {
-      if (seenEventIds.has(doc.eventId)) continue
-      seenEventIds.add(doc.eventId)
-      latestPropDocs.push(doc)
-    }
-
-    if (latestPropDocs.length === 0) {
+    if (propDocs.length === 0) {
       return success([], { count: 0, total: 0, page: pageNum, pages: 0, window: windowSize, ...(league && { league }) })
     }
 
     const playerIds = [...new Set(
-      latestPropDocs.flatMap((doc) => (doc.players || []).map((player) => player.playerId).filter(Boolean))
+      propDocs.flatMap((doc) => (doc.players || []).map((player) => player.playerId).filter(Boolean))
     )]
 
     if (playerIds.length === 0) {
       return success([], { count: 0, total: 0, page: pageNum, pages: 0, window: windowSize, ...(league && { league }) })
     }
 
-    const [playerDocs, gameStats] = await Promise.all([
+    const [playerDocs, playerGameWindows] = await Promise.all([
       getCollection('players')
         .find(
           { playerId: { $in: playerIds } },
@@ -638,22 +672,33 @@ export default async function playerRoutes(fastify) {
         )
         .toArray(),
       getCollection('player_stats')
-        .find(
-          { playerId: { $in: playerIds }, statType: 'game' },
-          { projection: { _id: 0, playerId: 1, gameDate: 1, stats: 1 } }
-        )
-        .sort({ gameDate: -1 })
+        .aggregate([
+          { $match: { playerId: { $in: playerIds }, statType: 'game' } },
+          { $sort: { playerId: 1, gameDate: -1 } },
+          {
+            $group: {
+              _id: '$playerId',
+              games: {
+                $push: {
+                  gameDate: '$gameDate',
+                  stats: '$stats',
+                },
+              },
+            },
+          },
+          {
+            $project: {
+              _id: 0,
+              playerId: '$_id',
+              games: { $slice: ['$games', windowSize] },
+            },
+          },
+        ])
         .toArray(),
     ])
 
     const playerMeta = new Map(playerDocs.map((player) => [player.playerId, player]))
-    const statsByPlayer = new Map()
-    for (const stat of gameStats) {
-      if (!statsByPlayer.has(stat.playerId)) statsByPlayer.set(stat.playerId, [])
-      if (statsByPlayer.get(stat.playerId).length < windowSize) {
-        statsByPlayer.get(stat.playerId).push(stat)
-      }
-    }
+    const statsByPlayer = new Map(playerGameWindows.map((entry) => [entry.playerId, entry.games || []]))
 
     const teamIds = new Set()
     for (const player of playerDocs) {
@@ -674,7 +719,7 @@ export default async function playerRoutes(fastify) {
 
     const bestTrendByPlayer = new Map()
 
-    for (const doc of latestPropDocs) {
+    for (const doc of propDocs) {
       const event = eventMap.get(doc.eventId)
       for (const player of doc.players || []) {
         if (!player.playerId) continue
@@ -690,6 +735,7 @@ export default async function playerRoutes(fastify) {
           for (const lineEntry of marketEntry.lines || []) {
             if (!Number.isFinite(lineEntry.point)) continue
 
+            const bestOffersByDirection = new Map()
             for (const offer of lineEntry.offers || []) {
               const direction = normalizeSelection(offer.selection)
               if (!direction) continue
@@ -702,6 +748,13 @@ export default async function playerRoutes(fastify) {
                 continue
               }
 
+              const currentBestOffer = bestOffersByDirection.get(direction)
+              if (!currentBestOffer || offer.price > currentBestOffer.price) {
+                bestOffersByDirection.set(direction, offer)
+              }
+            }
+
+            for (const [direction, offer] of bestOffersByDirection) {
               const trend = computeFlatBetTrend(
                 games,
                 fields,
@@ -772,6 +825,12 @@ export default async function playerRoutes(fastify) {
     const total = results.length
     const paginated = results.slice((pageNum - 1) * pageSize, pageNum * pageSize)
 
+    await redis.set(
+      cacheKey,
+      JSON.stringify({ results }),
+      { ex: PLAYER_TRENDS_CACHE_TTL_SECONDS }
+    )
+
     return success(paginated, {
       count: paginated.length,
       total,
@@ -782,6 +841,7 @@ export default async function playerRoutes(fastify) {
       ...(league && { league }),
       ...(bookmaker && { bookmaker }),
       sourceType,
+      cache: 'miss',
     })
   })
 
