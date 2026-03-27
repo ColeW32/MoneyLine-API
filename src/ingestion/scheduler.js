@@ -1126,8 +1126,9 @@ async function jobOdds(config) {
   const odds = [...oddsByEventId.values()]
 
   for (const o of odds) {
-    const originalEventId = o.eventId
+    const originalEventId = o._originalEventId || o.eventId
 
+    delete o._originalEventId
     delete o._sourceEventId
     delete o._sourceHomeTeam
     delete o._sourceAwayTeam
@@ -1154,6 +1155,8 @@ async function jobOdds(config) {
     if (originalEventId !== o.eventId) {
       await getCollection('odds').deleteOne({ eventId: originalEventId })
       await getCollection('player_props').deleteOne({ eventId: originalEventId })
+      await getCollection('edge_data').deleteOne({ eventId: originalEventId })
+      await getCollection('best_bets').deleteOne({ eventId: originalEventId })
     }
   }
   console.log(`[scheduler] Upserted ${odds.length} ${tag} odds`)

@@ -213,11 +213,14 @@ export function normalizeOdds(oddsApiData, leagueId, sport) {
     // Deterministic order: sportsbooks first, then exchanges, then alphabetical within each group
     bookmakers.sort(bookmakerSortComparator)
 
+    const oddsEventId = `${leagueId}-odds-${event.id}`
+
     return {
-      eventId: `${leagueId}-odds-${event.id}`,
+      eventId: oddsEventId,
       leagueId,
       sport,
       fetchedAt: new Date(),
+      _originalEventId: oddsEventId,
       _sourceEventId: String(event.id),
       _sourceHomeTeam: event.home_team,
       _sourceAwayTeam: event.away_team,

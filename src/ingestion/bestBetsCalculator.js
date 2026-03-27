@@ -110,8 +110,23 @@ export function findBestOdds(bookmakers, { bookmaker, sourceType } = {}) {
 export async function calculateBestBets(leagueId, sport) {
   console.log(`[best-bets] Calculating best bets for ${leagueId}...`)
 
+  const eventIds = await getCollection('events')
+    .find({ leagueId }, { projection: { _id: 0, eventId: 1 } })
+    .toArray()
+  const validEventIds = eventIds.map((event) => event.eventId).filter(Boolean)
+
+  await getCollection('best_bets').deleteMany(
+    validEventIds.length > 0
+      ? { leagueId, eventId: { $nin: validEventIds } }
+      : { leagueId }
+  )
+
   const odds = await getCollection('odds')
-    .find({ leagueId })
+    .find(
+      validEventIds.length > 0
+        ? { leagueId, eventId: { $in: validEventIds } }
+        : { leagueId, eventId: '__none__' }
+    )
     .sort({ fetchedAt: -1 })
     .toArray()
 
