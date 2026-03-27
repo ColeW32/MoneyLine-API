@@ -40,10 +40,15 @@ function buildSourceTypeMatch(sourceType) {
   }
 }
 
+function buildMarketMatch(market) {
+  if (!market) return null
+  return { 'edge.market': market }
+}
+
 export default async function edgeRoutes(fastify) {
   // GET /v1/edge — all current edges (pro+)
   fastify.get('/v1/edge', async (request, reply) => {
-    const { type, league, minProfit, minEdge, sourceType = 'all', limit, page } = request.query
+    const { type, league, market, minProfit, minEdge, sourceType = 'all', limit, page } = request.query
 
     const filter = {}
 
@@ -63,6 +68,7 @@ export default async function edgeRoutes(fastify) {
     // Build a $filter condition for edges based on query params
     const conditions = []
     if (type) conditions.push({ $eq: ['$$e.type', type] })
+    if (market) conditions.push({ $eq: ['$$e.market', market] })
     if (sourceType && sourceType !== 'all') {
       conditions.push({
         $or: [
@@ -116,7 +122,7 @@ export default async function edgeRoutes(fastify) {
 
   // GET /v1/edge/value — value bets only (pro+)
   fastify.get('/v1/edge/value', async (request, reply) => {
-    const { league, minEdge, limit: limitParam, sourceType = 'all' } = request.query
+    const { league, market, minEdge, limit: limitParam, sourceType = 'all' } = request.query
     const filter = {}
 
     const queryLimit = Math.min(50, Math.max(1, parseInt(limitParam) || 25))
@@ -145,6 +151,9 @@ export default async function edgeRoutes(fastify) {
     const stMatch = buildSourceTypeMatch(sourceType)
     if (stMatch) pipeline.push({ $match: stMatch })
 
+    const marketMatch = buildMarketMatch(market)
+    if (marketMatch) pipeline.push({ $match: marketMatch })
+
     if (minEdge) {
       pipeline.push({ $match: { 'edge.valueBet.edgePct': { $gte: parseFloat(minEdge) } } })
     }
@@ -166,7 +175,7 @@ export default async function edgeRoutes(fastify) {
 
   // GET /v1/edge/ev — positive EV bets only (pro+)
   fastify.get('/v1/edge/ev', async (request, reply) => {
-    const { league, limit: limitParam, sourceType = 'all' } = request.query
+    const { league, market, limit: limitParam, sourceType = 'all' } = request.query
     const filter = {}
 
     const queryLimit = Math.min(50, Math.max(1, parseInt(limitParam) || 25))
@@ -194,6 +203,9 @@ export default async function edgeRoutes(fastify) {
     const stMatch = buildSourceTypeMatch(sourceType)
     if (stMatch) pipeline.push({ $match: stMatch })
 
+    const marketMatch = buildMarketMatch(market)
+    if (marketMatch) pipeline.push({ $match: marketMatch })
+
     pipeline.push({ $limit: queryLimit })
 
     const docs = await getCollection('edge_data').aggregate(pipeline).toArray()
@@ -211,7 +223,7 @@ export default async function edgeRoutes(fastify) {
 
   // GET /v1/edge/arbitrage — arbitrage opportunities only (pro+)
   fastify.get('/v1/edge/arbitrage', async (request, reply) => {
-    const { league, minProfit, limit: limitParam, sourceType = 'all' } = request.query
+    const { league, market, minProfit, limit: limitParam, sourceType = 'all' } = request.query
     const filter = {}
 
     const queryLimit = Math.min(50, Math.max(1, parseInt(limitParam) || 25))
@@ -239,6 +251,9 @@ export default async function edgeRoutes(fastify) {
     const stMatch = buildSourceTypeMatch(sourceType)
     if (stMatch) pipeline.push({ $match: stMatch })
 
+    const marketMatch = buildMarketMatch(market)
+    if (marketMatch) pipeline.push({ $match: marketMatch })
+
     if (minProfit) {
       pipeline.push({ $match: { 'edge.arbitrage.profitPct': { $gte: parseFloat(minProfit) } } })
     }
@@ -261,22 +276,24 @@ export default async function edgeRoutes(fastify) {
   // GET /v1/events/:eventId/edge — edges for specific event (pro+)
   fastify.get('/v1/events/:eventId/edge', async (request, reply) => {
     const { eventId } = request.params
-    const { sourceType = 'all' } = request.query
+    const { sourceType = 'all', market } = request.query
 
     if (!(await hasCanonicalEvent(eventId))) {
       return reply.code(404).send(error(`Edge data for event '${eventId}' not found.`, 404))
     }
 
     // Build sourceType filter condition for $filter
-    let edgeFilter = true
+    const conditions = []
+    if (market) conditions.push({ $eq: ['$$e.market', market] })
     if (sourceType && sourceType !== 'all') {
-      edgeFilter = {
+      conditions.push({
         $or: [
           { $and: [{ $eq: ['$$e.type', 'arbitrage'] }, { $eq: ['$$e.venueType', sourceType] }] },
           { $and: [{ $ne: ['$$e.type', 'arbitrage'] }, { $eq: ['$$e.sourceType', sourceType] }] },
         ],
-      }
+      })
     }
+    const edgeFilter = conditions.length > 0 ? { $and: conditions } : true
 
     const docs = await getCollection('edge_data').aggregate([
       { $match: { eventId } },

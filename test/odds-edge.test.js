@@ -189,3 +189,52 @@ test('isStandardEventId accepts canonical ids and rejects legacy synthetic ids',
   assert.equal(isStandardEventId('nba-ev-cle-mil-20260318-1930', 'nba'), false)
   assert.equal(isStandardEventId('nhl-ev-998877', 'nba'), false)
 })
+
+test('player prop edges are identifiable by player_* market for API market filtering', () => {
+  const bookmakers = [
+    {
+      bookmakerId: 'fanduel',
+      bookmakerName: 'FanDuel',
+      sourceType: 'sportsbook',
+      sourceRegion: 'us',
+      markets: [
+        {
+          marketType: 'player_points',
+          outcomes: [
+            { name: 'Over', description: 'Jayson Tatum', point: 29.5, price: +125 },
+            { name: 'Under', description: 'Jayson Tatum', point: 29.5, price: -150 },
+          ],
+        },
+      ],
+    },
+    {
+      bookmakerId: 'draftkings',
+      bookmakerName: 'DraftKings',
+      sourceType: 'sportsbook',
+      sourceRegion: 'us',
+      markets: [
+        {
+          marketType: 'player_points',
+          outcomes: [
+            { name: 'Over', description: 'Jayson Tatum', point: 29.5, price: -105 },
+            { name: 'Under', description: 'Jayson Tatum', point: 29.5, price: -125 },
+          ],
+        },
+        {
+          marketType: 'moneyline',
+          outcomes: [
+            { name: 'Home Team', price: -130 },
+            { name: 'Away Team', price: +110 },
+          ],
+        },
+      ],
+    },
+  ]
+
+  const edges = detectEdges(bookmakers)
+  const playerPointsEdges = edges.filter((edge) => edge.market === 'player_points')
+
+  assert.ok(playerPointsEdges.length > 0)
+  assert.ok(playerPointsEdges.every((edge) => edge.description === 'Jayson Tatum'))
+  assert.ok(playerPointsEdges.every((edge) => edge.outcome.includes('Jayson Tatum')))
+})
