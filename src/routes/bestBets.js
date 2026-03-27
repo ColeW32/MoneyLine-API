@@ -1,37 +1,11 @@
 import { getCollection } from '../db.js'
 import { success, error } from '../utils/response.js'
 import { findBestOdds } from '../ingestion/bestBetsCalculator.js'
+import { findValidEventIdsByCollection, hasCanonicalEvent } from '../utils/canonicalEvents.js'
 
 function applyMarketFilter(markets, market) {
   if (!market) return markets
   return markets.filter((m) => m.marketType === market)
-}
-
-async function findValidEventIdsByCollection(collectionName, { league, pageNum, pageSize, sortField }) {
-  const pipeline = []
-
-  if (league) {
-    pipeline.push({ $match: { leagueId: league } })
-  }
-
-  pipeline.push(
-    { $sort: { [sortField]: -1 } },
-    {
-      $lookup: {
-        from: 'events',
-        localField: 'eventId',
-        foreignField: 'eventId',
-        as: 'event',
-      },
-    },
-    { $match: { event: { $ne: [] } } },
-    { $skip: (pageNum - 1) * pageSize },
-    { $limit: pageSize },
-    { $project: { _id: 0, eventId: 1 } }
-  )
-
-  const rows = await getCollection(collectionName).aggregate(pipeline).toArray()
-  return rows.map((row) => row.eventId).filter(Boolean)
 }
 
 export default async function bestBetsRoutes(fastify) {
@@ -113,12 +87,7 @@ export default async function bestBetsRoutes(fastify) {
   fastify.get('/v1/events/:eventId/best-bets', async (request, reply) => {
     const { eventId } = request.params
     const { market, bookmaker, sourceType } = request.query
-    const eventExists = await getCollection('events').findOne(
-      { eventId },
-      { projection: { _id: 1 } }
-    )
-
-    if (!eventExists) {
+    if (!(await hasCanonicalEvent(eventId))) {
       return reply.code(404).send(error(`Best bets for event '${eventId}' not found.`, 404))
     }
 

@@ -1,4 +1,5 @@
 import { getCollection } from '../db.js'
+import { ACTIVE_BULK_EVENT_STATUSES, isStandardEventId } from '../utils/canonicalEvents.js'
 import { americanToImplied, americanToDecimal, kellyFraction } from '../utils/odds.js'
 
 const VALUE_BET_THRESHOLD = 0.03  // 3% edge minimum for value classification
@@ -288,9 +289,17 @@ export async function calculateEdges(leagueId, sport) {
   console.log(`[edge] Calculating edges for ${leagueId}...`)
 
   const eventIds = await getCollection('events')
-    .find({ leagueId }, { projection: { _id: 0, eventId: 1 } })
+    .find(
+      {
+        leagueId,
+        status: { $in: ACTIVE_BULK_EVENT_STATUSES },
+      },
+      { projection: { _id: 0, eventId: 1 } }
+    )
     .toArray()
-  const validEventIds = eventIds.map((event) => event.eventId).filter(Boolean)
+  const validEventIds = eventIds
+    .map((event) => event.eventId)
+    .filter((eventId) => isStandardEventId(eventId, leagueId))
 
   await getCollection('edge_data').deleteMany(
     validEventIds.length > 0

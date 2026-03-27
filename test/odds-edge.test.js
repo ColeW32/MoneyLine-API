@@ -5,6 +5,7 @@ import { normalizeOdds } from '../src/ingestion/normalizers/shared.js'
 import { detectArbitrage, detectEdges } from '../src/ingestion/edgeCalculator.js'
 import { filterBookmakersForOddsResponse, applyBooksPerRequestLimit } from '../src/routes/odds.js'
 import { filterEdgesBySourceType } from '../src/routes/edge.js'
+import { isStandardEventId } from '../src/utils/canonicalEvents.js'
 
 function makeMoneylineBook(bookmakerId, bookmakerName, sourceType, sourceRegion, homePrice, awayPrice) {
   return {
@@ -180,4 +181,11 @@ test('filterEdgesBySourceType supports DFS edges explicitly', () => {
   const filtered = filterEdgesBySourceType(edges, 'dfs')
   assert.equal(filtered.length, 1)
   assert.equal(filtered[0].sourceType, 'dfs')
+})
+
+test('isStandardEventId accepts canonical ids and rejects legacy synthetic ids', () => {
+  assert.equal(isStandardEventId('nba-ev-311361', 'nba'), true)
+  assert.equal(isStandardEventId('nba-20260318-cle-mil', 'nba'), false)
+  assert.equal(isStandardEventId('nba-ev-cle-mil-20260318-1930', 'nba'), false)
+  assert.equal(isStandardEventId('nhl-ev-998877', 'nba'), false)
 })
