@@ -1,6 +1,8 @@
 import { getCollection } from '../db.js'
 import { getCurrentSeason } from '../config/sports.js'
 
+const HIT_RATE_SCHEMA_VERSION = 2
+
 /**
  * Maps Odds API market keys to player_stats.stats field names (GoalServe raw keys).
  * Multiple fields are summed (e.g., pts + reb + ast for PRA).
@@ -12,73 +14,126 @@ import { getCurrentSeason } from '../config/sports.js'
  */
 export const MARKET_TO_STAT_FIELDS = {
   nba: {
-    player_points:                            ['pts'],
-    player_rebounds:                          ['reb'],
-    player_assists:                           ['ast'],
-    player_blocks:                            ['blk'],
-    player_steals:                            ['stl'],
-    player_turnovers:                         ['to'],
-    player_threes:                            ['tp'],
-    player_field_goals:                       ['fgm'],
-    player_frees_made:                        ['ftm'],
-    player_frees_attempts:                    ['fta'],
-    player_blocks_steals:                     ['blk', 'stl'],
-    player_points_rebounds:                   ['pts', 'reb'],
-    player_points_assists:                    ['pts', 'ast'],
-    player_rebounds_assists:                  ['reb', 'ast'],
-    player_points_rebounds_assists:           ['pts', 'reb', 'ast'],
-    player_points_alternate:                  ['pts'],
-    player_rebounds_alternate:                ['reb'],
-    player_assists_alternate:                 ['ast'],
-    player_blocks_alternate:                  ['blk'],
-    player_steals_alternate:                  ['stl'],
-    player_turnovers_alternate:               ['to'],
-    player_threes_alternate:                  ['tp'],
-    player_points_rebounds_alternate:         ['pts', 'reb'],
-    player_points_assists_alternate:          ['pts', 'ast'],
-    player_rebounds_assists_alternate:        ['reb', 'ast'],
-    player_points_rebounds_assists_alternate: ['pts', 'reb', 'ast'],
+    player_points:                            ['points'],
+    player_rebounds:                          ['total_rebounds'],
+    player_assists:                           ['assists'],
+    player_blocks:                            ['blocks'],
+    player_steals:                            ['steals'],
+    player_turnovers:                         ['turnovers'],
+    player_threes:                            ['threepoint_goals_made'],
+    player_field_goals:                       ['field_goals_made'],
+    player_frees_made:                        ['freethrows_goals_made'],
+    player_frees_attempts:                    ['freethrows_goals_attempts'],
+    player_blocks_steals:                     ['blocks', 'steals'],
+    player_points_rebounds:                   ['points', 'total_rebounds'],
+    player_points_assists:                    ['points', 'assists'],
+    player_rebounds_assists:                  ['total_rebounds', 'assists'],
+    player_points_rebounds_assists:           ['points', 'total_rebounds', 'assists'],
+    player_points_alternate:                  ['points'],
+    player_rebounds_alternate:                ['total_rebounds'],
+    player_assists_alternate:                 ['assists'],
+    player_blocks_alternate:                  ['blocks'],
+    player_steals_alternate:                  ['steals'],
+    player_turnovers_alternate:               ['turnovers'],
+    player_threes_alternate:                  ['threepoint_goals_made'],
+    player_points_rebounds_alternate:         ['points', 'total_rebounds'],
+    player_points_assists_alternate:          ['points', 'assists'],
+    player_rebounds_assists_alternate:        ['total_rebounds', 'assists'],
+    player_points_rebounds_assists_alternate: ['points', 'total_rebounds', 'assists'],
   },
   nhl: {
-    player_shots_on_goal:           ['sog'],
-    player_goals:                   ['g'],
-    player_assists:                 ['ast'],
-    player_points:                  ['pts'],
-    player_blocked_shots:           ['bs'],
-    player_power_play_points:       ['ppp'],
-    player_goals_assists:           ['g', 'ast'],
-    player_shots_on_goal_alternate: ['sog'],
-    player_goals_alternate:         ['g'],
-    player_points_alternate:        ['pts'],
+    player_shots_on_goal:                 ['skater.shots_on_goal'],
+    player_goals:                         ['skater.goals'],
+    player_assists:                       ['skater.assists'],
+    player_points:                        ['skater.goals', 'skater.assists'],
+    player_blocked_shots:                 ['skater.blocked_shots'],
+    player_power_play_points:             ['skater.pp_goals', 'skater.pp_assists'],
+    player_total_saves:                   ['goalkeeping.saves'],
+    player_shots_on_goal_alternate:       ['skater.shots_on_goal'],
+    player_goals_alternate:               ['skater.goals'],
+    player_points_alternate:              ['skater.goals', 'skater.assists'],
+    player_assists_alternate:             ['skater.assists'],
+    player_power_play_points_alternate:   ['skater.pp_goals', 'skater.pp_assists'],
+    player_blocked_shots_alternate:       ['skater.blocked_shots'],
+    player_total_saves_alternate:         ['goalkeeping.saves'],
   },
   mlb: {
-    player_hits:                        ['h'],
-    player_home_runs:                   ['hr'],
-    player_runs_scored:                 ['r'],
-    player_rbis:                        ['rbi'],
-    player_total_bases:                 ['tb'],
-    player_walks:                       ['bb'],
-    player_stolen_bases:                ['sb'],
-    player_batter_strikeouts:           ['so'],
-    player_hits_runs_rbis:              ['h', 'r', 'rbi'],
-    player_strikeouts_pitcher:          ['so'],
-    player_pitcher_hits_allowed:        ['h'],
-    player_hits_alternate:              ['h'],
-    player_home_runs_alternate:         ['hr'],
-    player_strikeouts_pitcher_alternate: ['so'],
+    batter_hits:                        ['hitting.hits'],
+    batter_home_runs:                   ['hitting.home_runs'],
+    batter_hits_runs_rbis:              ['hitting.hits', 'hitting.runs', 'hitting.runs_batted_in'],
+    batter_runs_scored:                 ['hitting.runs'],
+    batter_rbis:                        ['hitting.runs_batted_in'],
+    batter_total_bases:                 ['hitting.total_bases'],
+    batter_singles:                     ['hitting.singles'],
+    batter_doubles:                     ['hitting.doubles'],
+    batter_triples:                     ['hitting.triples'],
+    batter_walks:                       ['hitting.walks'],
+    batter_strikeouts:                  ['hitting.strikeouts'],
+    batter_stolen_bases:                ['hitting.stolen_bases'],
+    pitcher_strikeouts:                 ['pitching.strikeouts'],
+    pitcher_hits_allowed:               ['pitching.hits'],
+    pitcher_walks:                      ['pitching.walks'],
+    pitcher_earned_runs:                ['pitching.earned_runs'],
+    pitcher_outs:                       ['pitching.outs_recorded'],
+    batter_total_bases_alternate:       ['hitting.total_bases'],
+    batter_home_runs_alternate:         ['hitting.home_runs'],
+    batter_hits_alternate:              ['hitting.hits'],
+    batter_rbis_alternate:              ['hitting.runs_batted_in'],
+    batter_walks_alternate:             ['hitting.walks'],
+    batter_strikeouts_alternate:        ['hitting.strikeouts'],
+    batter_runs_scored_alternate:       ['hitting.runs'],
+    batter_singles_alternate:           ['hitting.singles'],
+    batter_doubles_alternate:           ['hitting.doubles'],
+    batter_triples_alternate:           ['hitting.triples'],
+    pitcher_hits_allowed_alternate:     ['pitching.hits'],
+    pitcher_walks_alternate:            ['pitching.walks'],
+    pitcher_strikeouts_alternate:       ['pitching.strikeouts'],
   },
   nfl: {
-    player_pass_yds:         ['pass_yds'],
-    player_pass_tds:         ['pass_td'],
-    player_pass_completions: ['completions'],
-    player_pass_attempts:    ['attempts'],
-    player_rush_yds:         ['rush_yds'],
-    player_rush_attempts:    ['rush_att'],
-    player_reception_yds:    ['rec_yds'],
-    player_receptions:       ['rec'],
-    player_sacks:            ['sacks'],
-    player_solo_tackles:     ['solo_tackles'],
-    player_tackles_assists:  ['solo_tackles', 'ast_tackles'],
+    player_pass_yds:               ['passing.yards'],
+    player_pass_tds:               ['passing.passing_touch_downs'],
+    player_pass_completions:       ['passing.comp_att.completions'],
+    player_pass_attempts:          ['passing.comp_att.attempts'],
+    player_pass_interceptions:     ['passing.interceptions'],
+    player_pass_longest_completion:['passing.longest_pass'],
+    player_receptions:             ['receiving.total_receptions'],
+    player_reception_yds:          ['receiving.yards'],
+    player_reception_tds:          ['receiving.receiving_touch_downs'],
+    player_reception_longest:      ['receiving.longest_reception'],
+    player_rush_yds:               ['rushing.yards'],
+    player_rush_attempts:          ['rushing.total_rushes'],
+    player_rush_tds:               ['rushing.rushing_touch_downs'],
+    player_rush_longest:           ['rushing.longest_rush'],
+    player_pass_rush_yds:          ['passing.yards', 'rushing.yards'],
+    player_pass_rush_reception_yds:['passing.yards', 'rushing.yards', 'receiving.yards'],
+    player_pass_rush_reception_tds:['passing.passing_touch_downs', 'rushing.rushing_touch_downs', 'receiving.receiving_touch_downs'],
+    player_rush_reception_yds:     ['rushing.yards', 'receiving.yards'],
+    player_rush_reception_tds:     ['rushing.rushing_touch_downs', 'receiving.receiving_touch_downs'],
+    player_sacks:                  ['defensive.sacks.count', 'passing.sacks.count'],
+    player_solo_tackles:           ['defensive.tackles'],
+    player_tackles_assists:        ['defensive.tackles', 'defensive.assists'],
+    player_pass_yds_alternate:     ['passing.yards'],
+    player_pass_tds_alternate:     ['passing.passing_touch_downs'],
+    player_pass_attempts_alternate:['passing.comp_att.attempts'],
+    player_pass_completions_alternate: ['passing.comp_att.completions'],
+    player_pass_interceptions_alternate: ['passing.interceptions'],
+    player_pass_longest_completion_alternate: ['passing.longest_pass'],
+    player_pass_rush_yds_alternate: ['passing.yards', 'rushing.yards'],
+    player_pass_rush_reception_yds_alternate: ['passing.yards', 'rushing.yards', 'receiving.yards'],
+    player_pass_rush_reception_tds_alternate: ['passing.passing_touch_downs', 'rushing.rushing_touch_downs', 'receiving.receiving_touch_downs'],
+    player_receptions_alternate:   ['receiving.total_receptions'],
+    player_reception_yds_alternate:['receiving.yards'],
+    player_reception_tds_alternate:['receiving.receiving_touch_downs'],
+    player_reception_longest_alternate: ['receiving.longest_reception'],
+    player_rush_yds_alternate:     ['rushing.yards'],
+    player_rush_attempts_alternate:['rushing.total_rushes'],
+    player_rush_tds_alternate:     ['rushing.rushing_touch_downs'],
+    player_rush_longest_alternate: ['rushing.longest_rush'],
+    player_rush_reception_yds_alternate: ['rushing.yards', 'receiving.yards'],
+    player_rush_reception_tds_alternate: ['rushing.rushing_touch_downs', 'receiving.receiving_touch_downs'],
+    player_sacks_alternate:        ['defensive.sacks.count', 'passing.sacks.count'],
+    player_solo_tackles_alternate: ['defensive.tackles'],
+    player_tackles_assists_alternate: ['defensive.tackles', 'defensive.assists'],
   },
 }
 
@@ -89,17 +144,60 @@ export function getStatFields(leagueId, market) {
   return MARKET_TO_STAT_FIELDS[leagueId]?.[market] ?? null
 }
 
+export function getHitRateSchemaVersion() {
+  return HIT_RATE_SCHEMA_VERSION
+}
+
 /**
  * Sum the specified stat fields from a game's stats object.
  * Returns null if none of the fields are present.
  */
+function readNestedStat(stats, field) {
+  if (!stats || !field) return null
+
+  if (field === 'hitting.singles') {
+    const hits = readNestedStat(stats, 'hitting.hits')
+    const doubles = readNestedStat(stats, 'hitting.doubles') || 0
+    const triples = readNestedStat(stats, 'hitting.triples') || 0
+    const homeRuns = readNestedStat(stats, 'hitting.home_runs') || 0
+    return hits == null ? null : Math.max(0, hits - doubles - triples - homeRuns)
+  }
+
+  if (field === 'hitting.total_bases') {
+    const singles = readNestedStat(stats, 'hitting.singles')
+    const doubles = readNestedStat(stats, 'hitting.doubles') || 0
+    const triples = readNestedStat(stats, 'hitting.triples') || 0
+    const homeRuns = readNestedStat(stats, 'hitting.home_runs') || 0
+    return singles == null ? null : singles + (2 * doubles) + (3 * triples) + (4 * homeRuns)
+  }
+
+  if (field === 'pitching.outs_recorded') {
+    const innings = readNestedStat(stats, 'pitching.innings_pitched')
+    if (innings == null) return null
+    const whole = Math.trunc(innings)
+    const fractional = Math.round((innings - whole) * 10)
+    return (whole * 3) + fractional
+  }
+
+  const segments = String(field).split('.')
+  let value = stats
+  for (const segment of segments) {
+    if (value == null || typeof value !== 'object') return null
+    value = value[segment]
+  }
+
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
 function sumStatFields(stats, fields) {
   if (!stats || !fields?.length) return null
 
   let total = 0
   let found = false
   for (const field of fields) {
-    const val = stats[field]
+    const val = String(field).includes('.')
+      ? readNestedStat(stats, field)
+      : (typeof stats[field] === 'number' && Number.isFinite(stats[field]) ? stats[field] : null)
     if (typeof val === 'number' && Number.isFinite(val)) {
       total += val
       found = true
@@ -289,6 +387,7 @@ export async function calculateHitRates(leagueId) {
             L10: hitRates.L10,
             L25: hitRates.L25,
             season: hitRates.season,
+            schemaVersion: HIT_RATE_SCHEMA_VERSION,
             calculatedAt,
           },
         },

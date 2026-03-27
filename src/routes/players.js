@@ -1,7 +1,7 @@
 import { getCollection } from '../db.js'
 import { getCurrentSeason, SPORTS } from '../config/sports.js'
 import { success, error } from '../utils/response.js'
-import { computeHitRates, getStatFields } from '../ingestion/hitRateCalculator.js'
+import { computeHitRates, getHitRateSchemaVersion, getStatFields } from '../ingestion/hitRateCalculator.js'
 
 function parseDateBoundary(value, endOfDay = false) {
   if (!value) return null
@@ -23,10 +23,14 @@ async function resolveHitRates(playerId, leagueId, market, line) {
   // Check cache
   const cached = await getCollection('hit_rates').findOne(
     { playerId, leagueId, market, line },
-    { projection: { _id: 0, L5: 1, L10: 1, L25: 1, season: 1, calculatedAt: 1 } }
+    { projection: { _id: 0, L5: 1, L10: 1, L25: 1, season: 1, calculatedAt: 1, schemaVersion: 1 } }
   )
 
-  if (cached && cached.calculatedAt > ONE_HOUR_AGO) {
+  if (
+    cached &&
+    cached.calculatedAt > ONE_HOUR_AGO &&
+    cached.schemaVersion === getHitRateSchemaVersion()
+  ) {
     return { L5: cached.L5, L10: cached.L10, L25: cached.L25, season: cached.season }
   }
 
@@ -55,6 +59,7 @@ async function resolveHitRates(playerId, leagueId, market, line) {
       $set: {
         playerId, leagueId, market, line, direction: 'over',
         L5: rates.L5, L10: rates.L10, L25: rates.L25, season: rates.season,
+        schemaVersion: getHitRateSchemaVersion(),
         calculatedAt: new Date(),
       },
     },
