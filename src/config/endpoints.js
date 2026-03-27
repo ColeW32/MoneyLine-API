@@ -79,6 +79,15 @@ export const API_ENDPOINTS = [
     tier: 'free',
   },
   {
+    id: 'events_today_nba',
+    category: 'Events',
+    label: 'Events Today (NBA)',
+    method: 'GET',
+    path: '/v1/events/today?league=nba',
+    healthPath: '/v1/events/today?league=nba',
+    tier: 'free',
+  },
+  {
     id: 'events_nhl',
     category: 'Events',
     label: 'List Events (NHL)',

@@ -1,6 +1,81 @@
 import { getCollection } from '../db.js'
 import { success, error } from '../utils/response.js'
 
+const EVENT_TIMEZONE = 'America/New_York'
+const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/
+
+function getTimeZoneOffsetMs(date, timeZone) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    timeZoneName: 'shortOffset',
+  }).formatToParts(date)
+
+  const tzName = parts.find((part) => part.type === 'timeZoneName')?.value || 'GMT'
+  const match = tzName.match(/^GMT([+-])(\d{1,2})(?::?(\d{2}))?$/)
+  if (!match) return 0
+
+  const [, sign, hours, minutes = '00'] = match
+  const totalMinutes = (parseInt(hours, 10) * 60) + parseInt(minutes, 10)
+  return (sign === '+' ? 1 : -1) * totalMinutes * 60 * 1000
+}
+
+function zonedDateTimeToUtc(dateString, timeZone, hour = 0, minute = 0, second = 0) {
+  const [year, month, day] = dateString.split('-').map(Number)
+  let utcMillis = Date.UTC(year, month - 1, day, hour, minute, second)
+
+  for (let i = 0; i < 3; i += 1) {
+    const offsetMs = getTimeZoneOffsetMs(new Date(utcMillis), timeZone)
+    utcMillis = Date.UTC(year, month - 1, day, hour, minute, second) - offsetMs
+  }
+
+  return new Date(utcMillis)
+}
+
+function formatDateInTimeZone(date, timeZone = EVENT_TIMEZONE) {
+  return date.toLocaleDateString('en-CA', { timeZone })
+}
+
+function addDaysToDateString(dateString, days) {
+  const date = new Date(`${dateString}T00:00:00Z`)
+  date.setUTCDate(date.getUTCDate() + days)
+  return date.toISOString().slice(0, 10)
+}
+
+function getTimeZoneDayRange(dateString, timeZone = EVENT_TIMEZONE) {
+  const start = zonedDateTimeToUtc(dateString, timeZone, 0, 0, 0)
+  const end = zonedDateTimeToUtc(addDaysToDateString(dateString, 1), timeZone, 0, 0, 0)
+  return { start, end, date: dateString }
+}
+
+function getTodayRange(timeZone = EVENT_TIMEZONE, now = new Date()) {
+  return getTimeZoneDayRange(formatDateInTimeZone(now, timeZone), timeZone)
+}
+
+function buildDateFilter({ date, from, to } = {}) {
+  if (date) {
+    const { start, end } = getTimeZoneDayRange(date)
+    return { startTime: { $gte: start, $lt: end } }
+  }
+
+  if (!from && !to) return {}
+
+  const startTime = {}
+
+  if (from) {
+    startTime.$gte = DATE_ONLY_RE.test(from)
+      ? getTimeZoneDayRange(from).start
+      : new Date(from)
+  }
+
+  if (to) {
+    startTime[DATE_ONLY_RE.test(to) ? '$lt' : '$lte'] = DATE_ONLY_RE.test(to)
+      ? getTimeZoneDayRange(to).end
+      : new Date(to)
+  }
+
+  return { startTime }
+}
+
 export default async function eventRoutes(fastify) {
   // GET /v1/events — filter by league, date, status
   fastify.get('/v1/events', async (request, reply) => {
@@ -11,16 +86,7 @@ export default async function eventRoutes(fastify) {
     if (sport) filter.sport = sport
     if (status) filter.status = status
 
-    // Date filtering
-    if (date) {
-      const dayStart = new Date(`${date}T00:00:00Z`)
-      const dayEnd = new Date(`${date}T23:59:59Z`)
-      filter.startTime = { $gte: dayStart, $lte: dayEnd }
-    } else if (from || to) {
-      filter.startTime = {}
-      if (from) filter.startTime.$gte = new Date(from)
-      if (to) filter.startTime.$lte = new Date(`${to}T23:59:59Z`)
-    }
+    Object.assign(filter, buildDateFilter({ date, from, to }))
 
     // Enforce sport restriction for free tier
     const tierConfig = request.tierConfig
@@ -68,11 +134,9 @@ export default async function eventRoutes(fastify) {
   // GET /v1/events/today — today's games
   fastify.get('/v1/events/today', async (request, reply) => {
     const { league } = request.query
-    const now = new Date()
-    const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-    const dayEnd = new Date(dayStart.getTime() + 86_400_000)
+    const { start, end, date } = getTodayRange()
 
-    const filter = { startTime: { $gte: dayStart, $lt: dayEnd } }
+    const filter = { startTime: { $gte: start, $lt: end } }
     if (league) filter.leagueId = league
 
     const events = await getCollection('events')
@@ -80,7 +144,7 @@ export default async function eventRoutes(fastify) {
       .sort({ startTime: 1 })
       .toArray()
 
-    return success(events, { count: events.length, date: dayStart.toISOString().split('T')[0] })
+    return success(events, { count: events.length, date, timeZone: EVENT_TIMEZONE })
   })
 
   // GET /v1/events/:eventId — single event
@@ -118,13 +182,11 @@ export default async function eventRoutes(fastify) {
     const { leagueId } = request.params
     const { date } = request.query
 
-    const targetDate = date ? new Date(`${date}T00:00:00Z`) : new Date()
-    const dayStart = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate())
-    const dayEnd = new Date(dayStart.getTime() + 86_400_000)
+    const range = date ? getTimeZoneDayRange(date) : getTodayRange()
 
     const events = await getCollection('events')
       .find(
-        { leagueId, startTime: { $gte: dayStart, $lt: dayEnd } },
+        { leagueId, startTime: { $gte: range.start, $lt: range.end } },
         { projection: { _id: 0 } }
       )
       .sort({ startTime: 1 })
@@ -132,7 +194,8 @@ export default async function eventRoutes(fastify) {
 
     return success(events, {
       league: leagueId,
-      date: dayStart.toISOString().split('T')[0],
+      date: range.date,
+      timeZone: EVENT_TIMEZONE,
       count: events.length,
     })
   })
