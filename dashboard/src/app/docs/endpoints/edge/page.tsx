@@ -7,8 +7,8 @@ export default function EdgeEndpointsPage() {
       <p className="text-[15px] text-[#4a4a4a] leading-relaxed mt-3 max-w-2xl">
         Edge endpoints provide pre-computed arbitrage, expected value, and value
         bet signals across supported bookmakers, DFS platforms, and exchanges.
-        Arbitrage calculations exclude exchange venues and only use sportsbook
-        and DFS prices.
+        Arbitrage calculations keep only sane prices and restrict exchange
+        participation to approved venues.
         DFS prices are normalized into American odds so they can be compared
         directly, but they remain indicative because pick&apos;em multipliers can
         vary by card construction. Use{' '}
@@ -92,7 +92,7 @@ export default function EdgeEndpointsPage() {
       <EndpointCard
         method="GET"
         path="/v1/edge/arbitrage"
-        description="Get arbitrage opportunities across sportsbooks and DFS platforms."
+        description="Get arbitrage opportunities across sportsbooks, DFS platforms, and approved exchange venues."
         tier="pro"
         params={[
           {
@@ -105,7 +105,7 @@ export default function EdgeEndpointsPage() {
             name: 'sourceType',
             type: 'string',
             required: false,
-            description: 'sportsbook, dfs, exchange (value/EV only), all',
+            description: 'sportsbook, dfs, exchange, all',
           },
           {
             name: 'minProfit',

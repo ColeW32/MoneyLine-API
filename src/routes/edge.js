@@ -5,14 +5,14 @@ import { findValidEventIdsByCollection, hasCanonicalEvent } from '../utils/canon
 /**
  * Filter edges by sourceType.
  *
- * - arbitrage edges carry `venueType`: 'sportsbook' | 'dfs' | 'mixed'
+ * - arbitrage edges carry `venueType`: 'sportsbook' | 'dfs' | 'exchange' | 'mixed'
  * - value / ev edges carry `sourceType`: 'sportsbook' | 'dfs' | 'exchange'
  *
  * sourceType param:
  *   'sportsbook'           — only sportsbook-only arbs + sportsbook value/ev
  *   'dfs'                  — only DFS-only arbs + DFS value/ev
- *   'exchange'             — exchange value/ev only (arbitrage excludes exchanges)
- *   'all'                  — everything, including mixed sportsbook/dfs arbs
+ *   'exchange'             — exchange-only arbs from approved venues + exchange value/ev
+ *   'all'                  — everything, including sane mixed arbs
  */
 export function filterEdgesBySourceType(edges, sourceType) {
   if (!sourceType || sourceType === 'all') return edges

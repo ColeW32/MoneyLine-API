@@ -302,10 +302,45 @@ test('detectArbitrage tags sportsbook/dfs arb with venueType=mixed', () => {
   assert.equal(edges[0].venueType, 'mixed')
 })
 
-test('detectArbitrage excludes exchange bookmakers entirely', () => {
+test('detectArbitrage excludes non-allowlisted exchange bookmakers', () => {
   const bookmakers = makeBookmakers([
     { key: 'draftkings', sourceType: 'sportsbook', sourceRegion: 'us',    prices: [+200, -250] },
     { key: 'kalshi',     sourceType: 'exchange',   sourceRegion: 'us_ex', prices: [-250, +200] },
+  ])
+  const edges = detectArbitrage(bookmakers)
+  assert.equal(edges.length, 0)
+})
+
+test('detectArbitrage allows prophetx when the exchange price is in line with market consensus', () => {
+  const bookmakers = makeBookmakers([
+    { key: 'draftkings', sourceType: 'sportsbook', sourceRegion: 'us',    prices: [+105, -125] },
+    { key: 'fanduel',    sourceType: 'sportsbook', sourceRegion: 'us',    prices: [+100, -120] },
+    { key: 'prophetx',   sourceType: 'exchange',   sourceRegion: 'us_ex', prices: [-120, +110] },
+  ])
+  const edges = detectArbitrage(bookmakers)
+  assert.equal(edges.length, 1)
+  assert.equal(edges[0].venueType, 'mixed')
+  assert.deepEqual(
+    edges[0].arbitrage.books.map((book) => book.bookmakerId).sort(),
+    ['draftkings', 'prophetx']
+  )
+})
+
+test('detectArbitrage excludes severe sportsbook outliers that would fabricate an arb', () => {
+  const bookmakers = makeBookmakers([
+    { key: 'betmgm',    sourceType: 'sportsbook', sourceRegion: 'us',    prices: [-110, -110] },
+    { key: 'draftkings', sourceType: 'sportsbook', sourceRegion: 'us',   prices: [-115, +105] },
+    { key: 'fanatics',  sourceType: 'sportsbook', sourceRegion: 'us2',   prices: [-375, +260] },
+  ])
+  const edges = detectArbitrage(bookmakers)
+  assert.equal(edges.length, 0)
+})
+
+test('detectArbitrage excludes severe novig outliers while still allowing the venue in principle', () => {
+  const bookmakers = makeBookmakers([
+    { key: 'betmgm',    sourceType: 'sportsbook', sourceRegion: 'us',    prices: [-110, -110] },
+    { key: 'draftkings', sourceType: 'sportsbook', sourceRegion: 'us',   prices: [-115, +105] },
+    { key: 'novig',     sourceType: 'exchange',   sourceRegion: 'us_ex', prices: [-99900, +975] },
   ])
   const edges = detectArbitrage(bookmakers)
   assert.equal(edges.length, 0)

@@ -827,8 +827,8 @@ Browse edge opportunities (arbitrage, value bets, positive EV).
 **sourceType behavior for edge endpoints:**
 - `sportsbook` — sportsbook-only arbs + sportsbook value/EV bets.
 - `dfs` — DFS-only arbs + DFS value/EV bets.
-- `exchange` — exchange value/EV bets only. Arbitrage excludes exchanges.
-- `all` (default) — all edges including mixed arbitrage across sportsbooks and DFS.
+- `exchange` — exchange value/EV bets, plus exchange-only arbitrage from approved venues when the prices pass sanity checks.
+- `all` (default) — all edges including sane mixed arbitrage across sportsbooks, DFS, and approved exchange venues.
 
 **Arbitrage edge payload:**
 ```json
@@ -1048,7 +1048,7 @@ curl -H "x-api-key: ml_live_YOUR_KEY" \
   "https://mlapi.bet/v1/edge/arbitrage?league=nba&minProfit=1"
 ```
 
-### Get all arbitrage opportunities (including sportsbook/DFS mixed)
+### Get all arbitrage opportunities (including sane mixed arbs)
 
 ```bash
 curl -H "x-api-key: ml_live_YOUR_KEY" \

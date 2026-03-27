@@ -4,6 +4,8 @@ import { americanToImplied, americanToDecimal, kellyFraction } from '../utils/od
 
 const VALUE_BET_THRESHOLD = 0.03  // 3% edge minimum for value classification
 const EV_THRESHOLD = 0.01         // 1% EV minimum
+const ARBITRAGE_EXCHANGE_ALLOWLIST = new Set(['prophetx', 'novig'])
+const ARBITRAGE_MAX_IMPLIED_PROB_DELTA = 0.2
 
 function isBinaryOutcomeName(name) {
   const normalized = String(name || '').trim().toLowerCase()
@@ -56,6 +58,20 @@ function buildPropositionKey(marketType, outcome) {
   ].join(':')
 }
 
+function buildSelectionKey(marketType, outcome) {
+  return `${buildPropositionKey(marketType, outcome)}:${String(outcome.name || '').trim().toLowerCase()}`
+}
+
+function median(values) {
+  if (!values.length) return null
+  const sorted = [...values].sort((a, b) => a - b)
+  const middle = Math.floor(sorted.length / 2)
+  if (sorted.length % 2 === 0) {
+    return (sorted[middle - 1] + sorted[middle]) / 2
+  }
+  return sorted[middle]
+}
+
 function collectPropositions(bookmakers) {
   const propositions = new Map()
 
@@ -106,9 +122,69 @@ function collectPropositions(bookmakers) {
 }
 
 function isArbitrageEligibleBookmaker(bookmaker) {
-  return bookmaker?.sourceType
-    && bookmaker.sourceType !== 'unknown'
-    && bookmaker.sourceType !== 'exchange'
+  if (!bookmaker?.sourceType || bookmaker.sourceType === 'unknown') return false
+  if (bookmaker.sourceType !== 'exchange') return true
+  return ARBITRAGE_EXCHANGE_ALLOWLIST.has(String(bookmaker.bookmakerId || '').toLowerCase())
+}
+
+function buildArbitrageReferenceProbabilities(bookmakers) {
+  const referenceProbabilities = new Map()
+
+  for (const bookmaker of bookmakers) {
+    if (!bookmaker?.sourceType || bookmaker.sourceType === 'unknown' || bookmaker.sourceType === 'exchange') continue
+
+    for (const market of bookmaker.markets || []) {
+      for (const outcome of market.outcomes || []) {
+        if (!Number.isFinite(Number(outcome.price))) continue
+
+        const selectionKey = buildSelectionKey(market.marketType, outcome)
+        if (!referenceProbabilities.has(selectionKey)) {
+          referenceProbabilities.set(selectionKey, [])
+        }
+
+        referenceProbabilities.get(selectionKey).push(americanToImplied(outcome.price))
+      }
+    }
+  }
+
+  return referenceProbabilities
+}
+
+function isArbitrageOfferSane(bookmaker, market, outcome, referenceProbabilities) {
+  if (!Number.isFinite(Number(outcome?.price))) return false
+
+  const reference = referenceProbabilities.get(buildSelectionKey(market.marketType, outcome)) || []
+  if (reference.length === 0) {
+    return bookmaker.sourceType !== 'exchange'
+  }
+
+  const referenceMedian = median(reference)
+  if (referenceMedian == null) return bookmaker.sourceType !== 'exchange'
+
+  return Math.abs(americanToImplied(outcome.price) - referenceMedian) <= ARBITRAGE_MAX_IMPLIED_PROB_DELTA
+}
+
+function buildArbitrageBookmakers(bookmakers) {
+  const eligibleBookmakers = bookmakers.filter(isArbitrageEligibleBookmaker)
+  const referenceProbabilities = buildArbitrageReferenceProbabilities(bookmakers)
+
+  return eligibleBookmakers
+    .map((bookmaker) => {
+      const markets = (bookmaker.markets || [])
+        .map((market) => {
+          const outcomes = (market.outcomes || []).filter((outcome) =>
+            isArbitrageOfferSane(bookmaker, market, outcome, referenceProbabilities)
+          )
+
+          if (outcomes.length === 0) return null
+          return { ...market, outcomes }
+        })
+        .filter(Boolean)
+
+      if (markets.length === 0) return null
+      return { ...bookmaker, markets }
+    })
+    .filter(Boolean)
 }
 
 /**
@@ -124,14 +200,16 @@ function arbVenueType(legs) {
 
 /**
  * Detect arbitrage opportunities across bookmakers.
- * Only considers non-exchange bookmakers with a known sourceType.
+ * Only considers bookmakers with a known sourceType.
+ * Exchange participation is limited to approved venues, and all offers are
+ * sanity-checked against non-exchange consensus before they can create arbs.
  * Each edge is tagged with venueType for downstream filtering.
  *
  * Exported for testing.
  */
 export function detectArbitrage(bookmakers) {
   const edges = []
-  const propositions = collectPropositions(bookmakers.filter(isArbitrageEligibleBookmaker))
+  const propositions = collectPropositions(buildArbitrageBookmakers(bookmakers))
 
   for (const proposition of propositions.values()) {
     if (proposition.selections.size !== 2) continue
