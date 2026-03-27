@@ -264,17 +264,26 @@ export async function resolvePlayerIdFromName(playerName, leagueId, eventId) {
  *   - playerIds (string[]) — top-level array of resolved IDs, mirrors playerNames
  */
 export async function enrichPlayerPropsWithIds(playerPropsDoc) {
-  if (!playerPropsDoc?.players?.length) return playerPropsDoc
+  if (!playerPropsDoc) return null
+  if (!Array.isArray(playerPropsDoc.players)) return playerPropsDoc
+  if (playerPropsDoc.players.length === 0) {
+    playerPropsDoc.playerIds = []
+    playerPropsDoc.playerNames = []
+    return playerPropsDoc
+  }
 
   const { leagueId, eventId } = playerPropsDoc
-  const resolvedIds = []
+  const resolvedPlayers = []
 
   for (const entry of playerPropsDoc.players) {
     const playerId = await resolvePlayerIdFromName(entry.playerName, leagueId, eventId)
     entry.playerId = playerId ?? null
-    if (playerId) resolvedIds.push(playerId)
+    if (!playerId) continue
+    resolvedPlayers.push(entry)
   }
 
-  playerPropsDoc.playerIds = resolvedIds
+  playerPropsDoc.players = resolvedPlayers
+  playerPropsDoc.playerIds = resolvedPlayers.map((entry) => entry.playerId)
+  playerPropsDoc.playerNames = resolvedPlayers.map((entry) => entry.playerName)
   return playerPropsDoc
 }

@@ -1,5 +1,6 @@
 import { getCollection } from '../db.js'
 import { success, error } from '../utils/response.js'
+import { findValidEventIdsByCollection, hasCanonicalEvent } from '../utils/canonicalEvents.js'
 import { americanToImplied } from '../utils/odds.js'
 
 /**
@@ -154,6 +155,10 @@ export default async function oddsRoutes(fastify) {
     const { eventId } = request.params
     const { sourceType, market } = request.query
 
+    if (!(await hasCanonicalEvent(eventId))) {
+      return reply.code(404).send(error(`Odds for event '${eventId}' not found.`, 404))
+    }
+
     // Use aggregation to filter markets server-side (odds docs embed player props too)
     const marketFilter = market
       ? { $eq: ['$$m.marketType', market] }
@@ -212,19 +217,26 @@ export default async function oddsRoutes(fastify) {
     const { league, market, bookmaker, sourceType, limit, page } = request.query
 
     const filter = {}
-    if (league) filter.leagueId = league
 
     const pageNum = Math.max(1, parseInt(page) || 1)
     const pageSize = Math.min(50, Math.max(1, parseInt(limit) || 25))
+    const validEventIds = await findValidEventIdsByCollection('odds', {
+      league,
+      pageNum,
+      pageSize,
+      sortField: 'fetchedAt',
+    })
+
+    if (validEventIds.length === 0) {
+      return success([], { count: 0, page: pageNum })
+    }
 
     // Use aggregation pipeline to filter heavy nested data server-side.
     // Odds docs embed all markets including player props (50+ market types),
     // making raw documents 5-10MB. Default to game-level markets only.
     const pipeline = [
-      { $match: filter },
+      { $match: { eventId: { $in: validEventIds } } },
       { $sort: { fetchedAt: -1 } },
-      { $skip: (pageNum - 1) * pageSize },
-      { $limit: pageSize },
     ]
 
     // Server-side sourceType filtering

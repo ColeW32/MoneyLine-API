@@ -1149,11 +1149,15 @@ async function jobOdds(config) {
     const playerPropsDoc = buildPlayerPropsDocFromOddsDoc(o)
     if (playerPropsDoc) {
       await enrichPlayerPropsWithIds(playerPropsDoc)
-      await getCollection('player_props').updateOne(
-        { eventId: o.eventId },
-        { $set: playerPropsDoc },
-        { upsert: true }
-      )
+      if (playerPropsDoc.players?.length) {
+        await getCollection('player_props').updateOne(
+          { eventId: o.eventId },
+          { $set: playerPropsDoc },
+          { upsert: true }
+        )
+      } else {
+        await getCollection('player_props').deleteOne({ eventId: o.eventId })
+      }
     } else {
       await getCollection('player_props').deleteOne({ eventId: o.eventId })
     }

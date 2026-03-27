@@ -694,6 +694,8 @@ Player props use the same canonical `eventId` as the Events and Odds endpoints. 
 
 Every player entry in a props response includes a `playerId` that is the same canonical ID used by `/v1/players/:playerId` and `/v1/players/:playerId/stats`. This means you can filter props by player ID and join prop lines directly against game logs or season stats without any name-matching on your end.
 
+Edge and best-bet responses also use that same canonical `eventId`. If you discover a bet via `/v1/edge`, `/v1/edge/value`, `/v1/edge/ev`, `/v1/edge/arbitrage`, or `/v1/best-bets`, you can use the returned `eventId` directly with the event, odds, player-props, and event-edge endpoints.
+
 #### GET /v1/player-props
 Browse player props grouped by event, player, market, and line.
 
@@ -713,6 +715,7 @@ Browse player props grouped by event, player, market, and line.
 **Notes:**
 - Results are paginated at the event level.
 - Each player entry includes a `playerId` matching the ID returned by `/v1/players` and `/v1/players/:playerId/stats`.
+- Players that could not be resolved onto a canonical `playerId` are omitted from public player-props responses so every returned player remains joinable.
 - `playerId` and `player` can be combined with `market`, `bookmaker`, and `sourceType`.
 - Starter tier sees 1 venue per event after filtering because the underlying odds feed follows the same venue-slicing rules.
 

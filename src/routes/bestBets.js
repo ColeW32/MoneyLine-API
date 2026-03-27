@@ -7,6 +7,33 @@ function applyMarketFilter(markets, market) {
   return markets.filter((m) => m.marketType === market)
 }
 
+async function findValidEventIdsByCollection(collectionName, { league, pageNum, pageSize, sortField }) {
+  const pipeline = []
+
+  if (league) {
+    pipeline.push({ $match: { leagueId: league } })
+  }
+
+  pipeline.push(
+    { $sort: { [sortField]: -1 } },
+    {
+      $lookup: {
+        from: 'events',
+        localField: 'eventId',
+        foreignField: 'eventId',
+        as: 'event',
+      },
+    },
+    { $match: { event: { $ne: [] } } },
+    { $skip: (pageNum - 1) * pageSize },
+    { $limit: pageSize },
+    { $project: { _id: 0, eventId: 1 } }
+  )
+
+  const rows = await getCollection(collectionName).aggregate(pipeline).toArray()
+  return rows.map((row) => row.eventId).filter(Boolean)
+}
+
 export default async function bestBetsRoutes(fastify) {
   // GET /v1/best-bets — bulk best bets feed (pro+)
   fastify.get('/v1/best-bets', async (request, reply) => {
@@ -18,14 +45,20 @@ export default async function bestBetsRoutes(fastify) {
     // When a bookmaker filter is requested, compute on-demand from odds collection
     // so results reflect that book's best lines rather than the precomputed aggregate.
     if (bookmaker || (sourceType && sourceType !== 'all')) {
-      const oddsFilter = {}
-      if (league) oddsFilter.leagueId = league
+      const validEventIds = await findValidEventIdsByCollection('odds', {
+        league,
+        pageNum,
+        pageSize,
+        sortField: 'fetchedAt',
+      })
+
+      if (validEventIds.length === 0) {
+        return success([], { count: 0, page: pageNum })
+      }
 
       const oddsDocs = await getCollection('odds')
-        .find(oddsFilter, { projection: { _id: 0 } })
+        .find({ eventId: { $in: validEventIds } }, { projection: { _id: 0 } })
         .sort({ fetchedAt: -1 })
-        .skip((pageNum - 1) * pageSize)
-        .limit(pageSize)
         .toArray()
 
       const results = oddsDocs
@@ -49,14 +82,20 @@ export default async function bestBetsRoutes(fastify) {
     }
 
     // Default: serve from precomputed best_bets collection
-    const filter = {}
-    if (league) filter.leagueId = league
+    const validEventIds = await findValidEventIdsByCollection('best_bets', {
+      league,
+      pageNum,
+      pageSize,
+      sortField: 'calculatedAt',
+    })
+
+    if (validEventIds.length === 0) {
+      return success([], { count: 0, page: pageNum })
+    }
 
     const docs = await getCollection('best_bets')
-      .find(filter, { projection: { _id: 0 } })
+      .find({ eventId: { $in: validEventIds } }, { projection: { _id: 0 } })
       .sort({ calculatedAt: -1 })
-      .skip((pageNum - 1) * pageSize)
-      .limit(pageSize)
       .toArray()
 
     const results = docs
@@ -74,6 +113,14 @@ export default async function bestBetsRoutes(fastify) {
   fastify.get('/v1/events/:eventId/best-bets', async (request, reply) => {
     const { eventId } = request.params
     const { market, bookmaker, sourceType } = request.query
+    const eventExists = await getCollection('events').findOne(
+      { eventId },
+      { projection: { _id: 1 } }
+    )
+
+    if (!eventExists) {
+      return reply.code(404).send(error(`Best bets for event '${eventId}' not found.`, 404))
+    }
 
     // On-demand computation when bookmaker or sourceType filter is applied
     if (bookmaker || (sourceType && sourceType !== 'all')) {

@@ -1,5 +1,6 @@
 import { getCollection } from '../db.js'
 import { success, error } from '../utils/response.js'
+import { findValidEventIdsByCollection, hasCanonicalEvent } from '../utils/canonicalEvents.js'
 
 /**
  * Filter edges by sourceType.
@@ -45,10 +46,19 @@ export default async function edgeRoutes(fastify) {
     const { type, league, minProfit, minEdge, sourceType = 'all', limit, page } = request.query
 
     const filter = {}
-    if (league) filter.leagueId = league
 
     const pageNum = Math.max(1, parseInt(page) || 1)
     const pageSize = Math.min(50, Math.max(1, parseInt(limit) || 25))
+    const validEventIds = await findValidEventIdsByCollection('edge_data', {
+      league,
+      pageNum,
+      pageSize,
+      sortField: 'calculatedAt',
+    })
+
+    if (validEventIds.length === 0) {
+      return success([], { count: 0, page: pageNum })
+    }
 
     // Build a $filter condition for edges based on query params
     const conditions = []
@@ -85,10 +95,8 @@ export default async function edgeRoutes(fastify) {
       : true // no filtering, keep all edges
 
     const pipeline = [
-      { $match: filter },
+      { $match: { eventId: { $in: validEventIds } } },
       { $sort: { calculatedAt: -1 } },
-      { $skip: (pageNum - 1) * pageSize },
-      { $limit: pageSize },
       { $project: {
         _id: 0, eventId: 1, leagueId: 1, sport: 1, calculatedAt: 1,
         edges: {
@@ -110,15 +118,23 @@ export default async function edgeRoutes(fastify) {
   fastify.get('/v1/edge/value', async (request, reply) => {
     const { league, minEdge, limit: limitParam, sourceType = 'all' } = request.query
     const filter = {}
-    if (league) filter.leagueId = league
 
     const queryLimit = Math.min(50, Math.max(1, parseInt(limitParam) || 25))
+    const validEventIds = await findValidEventIdsByCollection('edge_data', {
+      league,
+      pageNum: 1,
+      pageSize: queryLimit * 5,
+      sortField: 'calculatedAt',
+    })
+
+    if (validEventIds.length === 0) {
+      return success([], { count: 0 })
+    }
 
     // Unwind + filter at the edge level for precise limiting
     const pipeline = [
-      { $match: filter },
+      { $match: { eventId: { $in: validEventIds } } },
       { $sort: { calculatedAt: -1 } },
-      { $limit: queryLimit * 5 },
       { $unwind: '$edges' },
       { $match: { 'edges.type': 'value' } },
       { $project: {
@@ -152,14 +168,22 @@ export default async function edgeRoutes(fastify) {
   fastify.get('/v1/edge/ev', async (request, reply) => {
     const { league, limit: limitParam, sourceType = 'all' } = request.query
     const filter = {}
-    if (league) filter.leagueId = league
 
     const queryLimit = Math.min(50, Math.max(1, parseInt(limitParam) || 25))
+    const validEventIds = await findValidEventIdsByCollection('edge_data', {
+      league,
+      pageNum: 1,
+      pageSize: queryLimit * 5,
+      sortField: 'calculatedAt',
+    })
+
+    if (validEventIds.length === 0) {
+      return success([], { count: 0 })
+    }
 
     const pipeline = [
-      { $match: filter },
+      { $match: { eventId: { $in: validEventIds } } },
       { $sort: { calculatedAt: -1 } },
-      { $limit: queryLimit * 5 },
       { $unwind: '$edges' },
       { $match: { 'edges.type': 'ev' } },
       { $project: {
@@ -189,14 +213,22 @@ export default async function edgeRoutes(fastify) {
   fastify.get('/v1/edge/arbitrage', async (request, reply) => {
     const { league, minProfit, limit: limitParam, sourceType = 'all' } = request.query
     const filter = {}
-    if (league) filter.leagueId = league
 
     const queryLimit = Math.min(50, Math.max(1, parseInt(limitParam) || 25))
+    const validEventIds = await findValidEventIdsByCollection('edge_data', {
+      league,
+      pageNum: 1,
+      pageSize: queryLimit * 5,
+      sortField: 'calculatedAt',
+    })
+
+    if (validEventIds.length === 0) {
+      return success([], { count: 0 })
+    }
 
     const pipeline = [
-      { $match: filter },
+      { $match: { eventId: { $in: validEventIds } } },
       { $sort: { calculatedAt: -1 } },
-      { $limit: queryLimit * 5 },
       { $unwind: '$edges' },
       { $match: { 'edges.type': 'arbitrage' } },
       { $project: {
@@ -230,6 +262,10 @@ export default async function edgeRoutes(fastify) {
   fastify.get('/v1/events/:eventId/edge', async (request, reply) => {
     const { eventId } = request.params
     const { sourceType = 'all' } = request.query
+
+    if (!(await hasCanonicalEvent(eventId))) {
+      return reply.code(404).send(error(`Edge data for event '${eventId}' not found.`, 404))
+    }
 
     // Build sourceType filter condition for $filter
     let edgeFilter = true

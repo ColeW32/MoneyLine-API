@@ -153,6 +153,8 @@ test('filterPlayerPropsDoc supports market, player, bookmaker, and sourceType fi
     ],
   }))
 
+  doc.players[0].playerId = 'nba-p-1'
+
   const filtered = filterPlayerPropsDoc(doc, {
     market: 'player_points',
     player: 'tatum',
@@ -166,6 +168,49 @@ test('filterPlayerPropsDoc supports market, player, bookmaker, and sourceType fi
   assert.equal(filtered.players[0].markets[0].marketType, 'player_points')
   assert.equal(filtered.players[0].markets[0].lines[0].offers.length, 1)
   assert.equal(filtered.players[0].markets[0].lines[0].offers[0].bookmakerId, 'kalshi')
+})
+
+test('filterPlayerPropsDoc omits players without a canonical playerId', () => {
+  const filtered = filterPlayerPropsDoc({
+    eventId: 'nba-ev-311286',
+    leagueId: 'nba',
+    sport: 'basketball',
+    fetchedAt: new Date('2026-03-25T00:10:00.000Z'),
+    players: [
+      {
+        playerName: 'Resolved Player',
+        playerId: 'nba-p-1',
+        markets: [
+          {
+            marketType: 'player_points',
+            marketName: 'Points',
+            format: 'over_under',
+            isAlternate: false,
+            lines: [{ point: 24.5, offers: [{ bookmakerId: 'fanduel', bookmakerName: 'FanDuel', sourceType: 'sportsbook', price: -110 }] }],
+          },
+        ],
+      },
+      {
+        playerName: 'Unresolved Player',
+        playerId: null,
+        markets: [
+          {
+            marketType: 'player_points',
+            marketName: 'Points',
+            format: 'over_under',
+            isAlternate: false,
+            lines: [{ point: 12.5, offers: [{ bookmakerId: 'fanduel', bookmakerName: 'FanDuel', sourceType: 'sportsbook', price: -110 }] }],
+          },
+        ],
+      },
+    ],
+  })
+
+  assert.ok(filtered)
+  assert.deepEqual(filtered.playerIds, ['nba-p-1'])
+  assert.deepEqual(filtered.playerNames, ['Resolved Player'])
+  assert.equal(filtered.players.length, 1)
+  assert.equal(filtered.players[0].playerName, 'Resolved Player')
 })
 
 test('buildPlayerPropsMarketCatalog returns structured market metadata by league', () => {

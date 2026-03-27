@@ -3,6 +3,7 @@ import { SPORTS, getPlayerPropMarkets } from '../config/sports.js'
 import { success, error } from '../utils/response.js'
 import { filterPlayerPropsDoc } from '../utils/playerProps.js'
 import { americanToImplied } from '../utils/odds.js'
+import { findValidEventIdsByCollection, hasCanonicalEvent } from '../utils/canonicalEvents.js'
 
 /**
  * Convert implied probability back to American odds.
@@ -117,20 +118,27 @@ export default async function playerPropsRoutes(fastify) {
     }
 
     const filter = {}
-    if (league) filter.leagueId = league
     if (market) filter.marketTypes = market
     if (player) filter.playerNames = { $regex: escapeRegex(player), $options: 'i' }
     if (playerId) filter.playerIds = playerId
 
     const pageNum = Math.max(1, parseInt(page) || 1)
     const pageSize = Math.min(50, Math.max(1, parseInt(limit) || 25))
+    const validEventIds = await findValidEventIdsByCollection('player_props', {
+      league,
+      pageNum,
+      pageSize,
+      sortField: 'fetchedAt',
+    })
+
+    if (validEventIds.length === 0) {
+      return success([], { count: 0, page: pageNum })
+    }
 
     // Use aggregation to filter markets server-side and avoid transferring massive documents
     const pipeline = [
-      { $match: filter },
+      { $match: { ...filter, eventId: { $in: validEventIds } } },
       { $sort: { fetchedAt: -1 } },
-      { $skip: (pageNum - 1) * pageSize },
-      { $limit: pageSize },
       { $project: {
         _id: 0, eventId: 1, leagueId: 1, sport: 1, fetchedAt: 1,
         players: {
@@ -161,6 +169,10 @@ export default async function playerPropsRoutes(fastify) {
   fastify.get('/v1/events/:eventId/player-props', async (request, reply) => {
     const { eventId } = request.params
     const { market, player, playerId, bookmaker, sourceType } = request.query
+
+    if (!(await hasCanonicalEvent(eventId))) {
+      return reply.code(404).send(error(`Player props for event '${eventId}' not found.`, 404))
+    }
 
     // Use aggregation pipeline to filter heavy nested data server-side
     // Player props docs can be 5-10MB with 50+ players × 15+ markets × many lines

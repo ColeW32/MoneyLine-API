@@ -177,6 +177,7 @@ function makePropsDoc({ bookmakers } = {}) {
     players: [
       {
         playerName: 'Jayson Tatum',
+        playerId: 'nba-p-1',
         markets: [
           {
             marketType: 'player_points',

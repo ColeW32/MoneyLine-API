@@ -89,6 +89,7 @@ test('enrichPlayerPropsWithIds: empty players array returns doc unchanged', asyn
   const doc = { eventId: 'nba-ev-1', leagueId: 'nba', sport: 'basketball', players: [] }
   const result = await enrichPlayerPropsWithIds(doc)
   assert.deepEqual(result.playerIds, [])
+  assert.deepEqual(result.playerNames, [])
   assert.equal(result.players.length, 0)
 })
 

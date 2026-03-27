@@ -172,6 +172,7 @@ export function filterPlayerPropsDoc(playerPropsDoc, {
 
   const players = (playerPropsDoc.players || [])
     .filter((playerEntry) => {
+      if (!playerEntry.playerId) return false
       if (playerId && playerEntry.playerId !== playerId) return false
       if (!normalizedPlayer) return true
       return playerEntry.playerName.toLowerCase().includes(normalizedPlayer)
@@ -207,6 +208,8 @@ export function filterPlayerPropsDoc(playerPropsDoc, {
     leagueId: playerPropsDoc.leagueId,
     sport: playerPropsDoc.sport,
     fetchedAt: playerPropsDoc.fetchedAt,
+    playerIds: players.map((playerEntry) => playerEntry.playerId),
+    playerNames: players.map((playerEntry) => playerEntry.playerName),
     players,
   }
 }
