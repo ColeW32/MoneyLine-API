@@ -455,6 +455,71 @@ Get players sorted by hit rate, paired with their best available prop line and o
 
 ---
 
+#### GET /v1/players/trends
+Get each player's highest-profit active prop trend over a rolling game window. This endpoint is designed for trends/discovery pages that need matchup context, the best current bet, and flat-stake profit in one response.
+
+**Tier:** Pro+
+**Params:**
+| Param | Type | Default | Description |
+|-------|------|---------|-------------|
+| league | string | — | Optional league ID filter (`nba`, `nfl`, `mlb`, `nhl`) |
+| window | number | `25` | Rolling game window size. Integer from `1` to `100` |
+| bookmaker | string | — | Optional bookmaker key or display name filter |
+| sourceType | string | `all` | `all`, `sportsbook`, `dfs`, or `exchange` |
+| limit | number | `25` | Max 50 |
+| page | number | `1` | Page number |
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "player": {
+        "playerId": "nba-p-4065648",
+        "name": "Coby White",
+        "teamId": "nba-chi",
+        "team": "CHI",
+        "matchup": "CHI @ NYK"
+      },
+      "eventId": "nba-ev-311286",
+      "leagueId": "nba",
+      "bet": {
+        "market": "player_points",
+        "marketName": "Player Points",
+        "direction": "under",
+        "line": 24.5,
+        "price": 125,
+        "bookmakerId": "bovada",
+        "bookmakerName": "Bovada",
+        "sourceType": "sportsbook"
+      },
+      "sampleSize": 25,
+      "performance": {
+        "wins": 20,
+        "losses": 5,
+        "pushes": 0,
+        "hitRate": 0.8,
+        "stake": 100
+      },
+      "profit": 2000
+    }
+  ],
+  "meta": {
+    "count": 25,
+    "total": 73,
+    "page": 1,
+    "pages": 3,
+    "window": 25,
+    "stake": 100,
+    "league": "nba",
+    "sourceType": "all"
+  }
+}
+```
+
+---
+
 #### GET /v1/players/:playerId/analysis
 Get an integrated analysis for a player: current best bet, game-by-game chart data, and hit rates in a single response. Designed for player detail screens.
 
@@ -1043,6 +1108,13 @@ curl -H "x-api-key: ml_live_YOUR_KEY" \
   "https://mlapi.bet/v1/players/trending?league=nba&market=player_points&sortBy=l5"
 ```
 
+### Get top player trends by flat-stake profit (Pro+)
+
+```bash
+curl -H "x-api-key: ml_live_YOUR_KEY" \
+  "https://mlapi.bet/v1/players/trends?league=nba&window=25&limit=10"
+```
+
 ### Get hit rates for a player against a line (Pro+)
 
 ```bash
@@ -1084,6 +1156,7 @@ curl -H "x-api-key: ml_live_YOUR_KEY" \
 | GET | /v1/players/:playerId/hit-rates | Pro | Hit rates (L5/L10/L25/season) against a prop line |
 | GET | /v1/players/:playerId/analysis | Pro | Integrated player detail: best bet + chart data + hit rates |
 | GET | /v1/players/trending | Pro | Players sorted by hit rate with best available line |
+| GET | /v1/players/trends | Pro | Highest-profit active player prop trend per player over a rolling window |
 | GET | /v1/odds | Starter | Browse odds |
 | GET | /v1/events/:eventId/odds | Starter | Event odds |
 | GET | /v1/odds/bookmakers | Starter | List bookmakers |

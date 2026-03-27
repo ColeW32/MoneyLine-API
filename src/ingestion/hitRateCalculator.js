@@ -189,7 +189,7 @@ function readNestedStat(stats, field) {
   return typeof value === 'number' && Number.isFinite(value) ? value : null
 }
 
-function sumStatFields(stats, fields) {
+export function sumStatFieldsForGame(stats, fields) {
   if (!stats || !fields?.length) return null
 
   let total = 0
@@ -230,7 +230,7 @@ export function computeHitRates(games, fields, line, direction = 'over', season 
 
     let hits = 0
     for (const game of slice) {
-      const val = sumStatFields(game.stats, fields)
+      const val = sumStatFieldsForGame(game.stats, fields)
       if (val === null) continue
       const hit = direction === 'over' ? val > line : val < line
       if (hit) hits++
@@ -248,7 +248,7 @@ export function computeHitRates(games, fields, line, direction = 'over', season 
   if (seasonGames.length > 0) {
     let hits = 0
     for (const game of seasonGames) {
-      const val = sumStatFields(game.stats, fields)
+      const val = sumStatFieldsForGame(game.stats, fields)
       if (val === null) continue
       const hit = direction === 'over' ? val > line : val < line
       if (hit) hits++

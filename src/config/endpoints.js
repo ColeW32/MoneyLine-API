@@ -234,6 +234,15 @@ export const API_ENDPOINTS = [
     tier: 'pro',
   },
   {
+    id: 'players_trends',
+    category: 'Player Analysis',
+    label: 'Player Trends (NBA)',
+    method: 'GET',
+    path: '/v1/players/trends?league=nba&window=25&limit=10',
+    healthPath: '/v1/players/trends?league=nba&window=25&limit=10',
+    tier: 'pro',
+  },
+  {
     id: 'players_hit_rates',
     category: 'Player Analysis',
     label: 'Player Hit Rates',

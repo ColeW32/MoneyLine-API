@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { computeHitRates, getStatFields } from '../src/ingestion/hitRateCalculator.js'
+import { computeHitRates, getStatFields, sumStatFieldsForGame } from '../src/ingestion/hitRateCalculator.js'
 
 test('computeHitRates uses current NBA stat keys from stored game logs', () => {
   const games = [
@@ -44,4 +44,32 @@ test('computeHitRates supports derived MLB total bases and pitcher outs', () => 
 
   assert.deepEqual(totalBasesRates.L5, { games: 2, hits: 2, rate: 1 })
   assert.deepEqual(outsRates.L5, { games: 2, hits: 1, rate: 0.5 })
+})
+
+test('sumStatFieldsForGame supports nested and derived stat fields', () => {
+  const nhlTotal = sumStatFieldsForGame(
+    { skater: { goals: 1, assists: 2, shots_on_goal: 6 } },
+    getStatFields('nhl', 'player_points')
+  )
+
+  const mlbSingles = sumStatFieldsForGame(
+    { hitting: { hits: 3, doubles: 1, triples: 0, home_runs: 1 } },
+    getStatFields('mlb', 'batter_singles')
+  )
+
+  assert.equal(nhlTotal, 3)
+  assert.equal(mlbSingles, 1)
+})
+
+test('computeHitRates supports under direction', () => {
+  const games = [
+    { season: '2025-26', stats: { points: 18 } },
+    { season: '2025-26', stats: { points: 21 } },
+    { season: '2025-26', stats: { points: 12 } },
+    { season: '2025-26', stats: { points: 19 } },
+  ]
+
+  const rates = computeHitRates(games, getStatFields('nba', 'player_points'), 19.5, 'under', '2025-26')
+
+  assert.deepEqual(rates.L5, { games: 4, hits: 3, rate: 0.75 })
 })

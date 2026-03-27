@@ -298,6 +298,57 @@ export default function TeamsPlayersPage() {
 
       <EndpointCard
         method="GET"
+        path="/v1/players/trends"
+        description="Get each player's highest-profit active prop trend over a rolling game window, including matchup context and flat-stake profit."
+        tier="pro"
+        params={[
+          { name: 'league', type: 'string', required: false, description: 'Optional league ID filter (nba, nfl, mlb, nhl)' },
+          { name: 'window', type: 'number', required: false, description: 'Rolling game window size. Integer 1-100, default 25' },
+          { name: 'bookmaker', type: 'string', required: false, description: 'Optional bookmaker key or display name filter' },
+          { name: 'sourceType', type: 'string', required: false, description: 'all, sportsbook, dfs, exchange. Default all' },
+          { name: 'limit', type: 'number', required: false, description: 'Max 50, default 25' },
+          { name: 'page', type: 'number', required: false, description: 'Page number for pagination' },
+        ]}
+        response={`{
+  "success": true,
+  "data": [
+    {
+      "player": {
+        "playerId": "nba-p-4065648",
+        "name": "Coby White",
+        "teamId": "nba-chi",
+        "team": "CHI",
+        "matchup": "CHI @ NYK"
+      },
+      "eventId": "nba-ev-311286",
+      "leagueId": "nba",
+      "bet": {
+        "market": "player_points",
+        "marketName": "Player Points",
+        "direction": "under",
+        "line": 24.5,
+        "price": 125,
+        "bookmakerId": "bovada",
+        "bookmakerName": "Bovada",
+        "sourceType": "sportsbook"
+      },
+      "sampleSize": 25,
+      "performance": {
+        "wins": 20,
+        "losses": 5,
+        "pushes": 0,
+        "hitRate": 0.8,
+        "stake": 100
+      },
+      "profit": 2000
+    }
+  ],
+  "meta": { "count": 25, "total": 73, "page": 1, "pages": 3, "window": 25, "stake": 100, "league": "nba", "sourceType": "all" }
+}`}
+      />
+
+      <EndpointCard
+        method="GET"
         path="/v1/players/:playerId/hit-rates"
         description="Get hit rates (L5, L10, L25, season) for a player against a specific prop line."
         tier="pro"

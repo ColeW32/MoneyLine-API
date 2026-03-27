@@ -165,6 +165,9 @@ async function main() {
   const trendingPlayers = await request(baseUrl, `/v1/players/trending?league=${league}&market=player_points&sortBy=l5&limit=10`, { key })
   printResult('GET /v1/players/trending', trendingPlayers, { allowFailure: true, showBody })
 
+  const playerTrends = await request(baseUrl, `/v1/players/trends?league=${league}&window=25&limit=10`, { key })
+  printResult('GET /v1/players/trends', playerTrends, { allowFailure: true, showBody })
+
   if (eventId) {
     const eventOddsAll = await request(baseUrl, `/v1/events/${eventId}/odds?sourceType=all`, { key })
     failed = !printResult(`GET /v1/events/${eventId}/odds?sourceType=all`, eventOddsAll, { showBody }) || failed

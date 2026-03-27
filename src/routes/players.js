@@ -1,7 +1,13 @@
 import { getCollection } from '../db.js'
 import { getCurrentSeason, SPORTS } from '../config/sports.js'
 import { success, error } from '../utils/response.js'
-import { computeHitRates, getHitRateSchemaVersion, getStatFields } from '../ingestion/hitRateCalculator.js'
+import {
+  computeHitRates,
+  getHitRateSchemaVersion,
+  getStatFields,
+  sumStatFieldsForGame,
+} from '../ingestion/hitRateCalculator.js'
+import { americanToDecimal } from '../utils/odds.js'
 
 function parseDateBoundary(value, endOfDay = false) {
   if (!value) return null
@@ -67,6 +73,74 @@ async function resolveHitRates(playerId, leagueId, market, line) {
   )
 
   return rates
+}
+
+function normalizeSelection(selection) {
+  const normalized = String(selection || '').trim().toLowerCase()
+  return ['over', 'under'].includes(normalized) ? normalized : null
+}
+
+function roundToCents(value) {
+  return Math.round(value * 100) / 100
+}
+
+function computeFlatBetTrend(games, fields, line, direction, price, windowSize, stake = 100) {
+  if (!Number.isFinite(price) || price === 0) return null
+
+  const recentGames = games.slice(0, windowSize)
+  if (recentGames.length === 0) return null
+
+  const winProfit = stake * (americanToDecimal(price) - 1)
+  let sampleSize = 0
+  let wins = 0
+  let losses = 0
+  let pushes = 0
+  let profit = 0
+
+  for (const game of recentGames) {
+    const value = sumStatFieldsForGame(game.stats, fields)
+    if (value == null) continue
+
+    sampleSize += 1
+
+    if (value === line) {
+      pushes += 1
+      continue
+    }
+
+    const won = direction === 'over' ? value > line : value < line
+    if (won) {
+      wins += 1
+      profit += winProfit
+    } else {
+      losses += 1
+      profit -= stake
+    }
+  }
+
+  if (sampleSize === 0) return null
+
+  return {
+    sampleSize,
+    wins,
+    losses,
+    pushes,
+    hitRate: Math.round((wins / sampleSize) * 1000) / 1000,
+    profit: roundToCents(profit),
+    stake,
+  }
+}
+
+function buildMatchup(event, teamsById) {
+  if (!event) return null
+
+  const awayTeam = teamsById.get(event.awayTeamId)
+  const homeTeam = teamsById.get(event.homeTeamId)
+  const away = awayTeam?.abbreviation || event.awayTeamName || event.awayTeamId
+  const home = homeTeam?.abbreviation || event.homeTeamName || event.homeTeamId
+
+  if (!away || !home) return null
+  return `${away} @ ${home}`
 }
 
 export default async function playerRoutes(fastify) {
@@ -468,6 +542,249 @@ export default async function playerRoutes(fastify) {
     })
   })
 
+  // GET /v1/players/trends
+  // Returns each player's highest-profit active prop trend over a rolling game window.
+  // Query params: league (optional), window (default 25), limit, page, bookmaker, sourceType
+  fastify.get('/v1/players/trends', async (request, reply) => {
+    const {
+      league,
+      window = 25,
+      limit,
+      page,
+      bookmaker,
+      sourceType = 'all',
+    } = request.query
+
+    if (league && !SPORTS[league]) {
+      return reply.code(400).send(error(`Unknown league '${league}'.`, 400))
+    }
+
+    const windowSize = parseInt(window, 10)
+    if (!Number.isInteger(windowSize) || windowSize < 1 || windowSize > 100) {
+      return reply.code(400).send(error('window must be an integer between 1 and 100.', 400))
+    }
+
+    if (!['all', 'sportsbook', 'dfs', 'exchange'].includes(sourceType)) {
+      return reply.code(400).send(error('sourceType must be one of: all, sportsbook, dfs, exchange.', 400))
+    }
+
+    const pageNum = Math.max(1, parseInt(page, 10) || 1)
+    const pageSize = Math.min(50, Math.max(1, parseInt(limit, 10) || 25))
+    const normalizedBookmaker = bookmaker ? String(bookmaker).trim().toLowerCase() : null
+
+    const now = new Date()
+    const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    const dayEnd = new Date(dayStart.getTime() + 86_400_000)
+
+    const eventFilter = { startTime: { $gte: dayStart, $lt: dayEnd } }
+    if (league) eventFilter.leagueId = league
+
+    const events = await getCollection('events')
+      .find(
+        eventFilter,
+        {
+          projection: {
+            _id: 0,
+            eventId: 1,
+            leagueId: 1,
+            homeTeamId: 1,
+            awayTeamId: 1,
+            homeTeamName: 1,
+            awayTeamName: 1,
+            startTime: 1,
+          },
+        }
+      )
+      .toArray()
+
+    if (events.length === 0) {
+      return success([], { count: 0, total: 0, page: pageNum, pages: 0, window: windowSize, ...(league && { league }) })
+    }
+
+    const eventMap = new Map(events.map((event) => [event.eventId, event]))
+    const propDocs = await getCollection('player_props')
+      .find(
+        { eventId: { $in: [...eventMap.keys()] } },
+        { projection: { _id: 0, eventId: 1, leagueId: 1, fetchedAt: 1, players: 1 } }
+      )
+      .sort({ fetchedAt: -1 })
+      .toArray()
+
+    const latestPropDocs = []
+    const seenEventIds = new Set()
+    for (const doc of propDocs) {
+      if (seenEventIds.has(doc.eventId)) continue
+      seenEventIds.add(doc.eventId)
+      latestPropDocs.push(doc)
+    }
+
+    if (latestPropDocs.length === 0) {
+      return success([], { count: 0, total: 0, page: pageNum, pages: 0, window: windowSize, ...(league && { league }) })
+    }
+
+    const playerIds = [...new Set(
+      latestPropDocs.flatMap((doc) => (doc.players || []).map((player) => player.playerId).filter(Boolean))
+    )]
+
+    if (playerIds.length === 0) {
+      return success([], { count: 0, total: 0, page: pageNum, pages: 0, window: windowSize, ...(league && { league }) })
+    }
+
+    const [playerDocs, gameStats] = await Promise.all([
+      getCollection('players')
+        .find(
+          { playerId: { $in: playerIds } },
+          { projection: { _id: 0, playerId: 1, playerName: 1, teamId: 1, leagueId: 1, position: 1 } }
+        )
+        .toArray(),
+      getCollection('player_stats')
+        .find(
+          { playerId: { $in: playerIds }, statType: 'game' },
+          { projection: { _id: 0, playerId: 1, gameDate: 1, stats: 1 } }
+        )
+        .sort({ gameDate: -1 })
+        .toArray(),
+    ])
+
+    const playerMeta = new Map(playerDocs.map((player) => [player.playerId, player]))
+    const statsByPlayer = new Map()
+    for (const stat of gameStats) {
+      if (!statsByPlayer.has(stat.playerId)) statsByPlayer.set(stat.playerId, [])
+      if (statsByPlayer.get(stat.playerId).length < windowSize) {
+        statsByPlayer.get(stat.playerId).push(stat)
+      }
+    }
+
+    const teamIds = new Set()
+    for (const player of playerDocs) {
+      if (player.teamId) teamIds.add(player.teamId)
+    }
+    for (const event of events) {
+      if (event.homeTeamId) teamIds.add(event.homeTeamId)
+      if (event.awayTeamId) teamIds.add(event.awayTeamId)
+    }
+
+    const teamDocs = await getCollection('teams')
+      .find(
+        { teamId: { $in: [...teamIds] } },
+        { projection: { _id: 0, teamId: 1, abbreviation: 1, name: 1 } }
+      )
+      .toArray()
+    const teamsById = new Map(teamDocs.map((team) => [team.teamId, team]))
+
+    const bestTrendByPlayer = new Map()
+
+    for (const doc of latestPropDocs) {
+      const event = eventMap.get(doc.eventId)
+      for (const player of doc.players || []) {
+        if (!player.playerId) continue
+
+        const meta = playerMeta.get(player.playerId)
+        const games = statsByPlayer.get(player.playerId) || []
+        if (!meta || games.length === 0) continue
+
+        for (const marketEntry of player.markets || []) {
+          const fields = getStatFields(doc.leagueId, marketEntry.marketType)
+          if (!fields) continue
+
+          for (const lineEntry of marketEntry.lines || []) {
+            if (!Number.isFinite(lineEntry.point)) continue
+
+            for (const offer of lineEntry.offers || []) {
+              const direction = normalizeSelection(offer.selection)
+              if (!direction) continue
+              if (sourceType !== 'all' && offer.sourceType !== sourceType) continue
+              if (
+                normalizedBookmaker
+                && String(offer.bookmakerId || '').toLowerCase() !== normalizedBookmaker
+                && String(offer.bookmakerName || '').toLowerCase() !== normalizedBookmaker
+              ) {
+                continue
+              }
+
+              const trend = computeFlatBetTrend(
+                games,
+                fields,
+                lineEntry.point,
+                direction,
+                offer.price,
+                windowSize
+              )
+
+              if (!trend) continue
+
+              const team = teamsById.get(meta.teamId)
+              const candidate = {
+                player: {
+                  playerId: player.playerId,
+                  name: player.playerName || meta.playerName,
+                  teamId: meta.teamId || null,
+                  team: team?.abbreviation || team?.name || null,
+                  matchup: buildMatchup(event, teamsById),
+                },
+                eventId: doc.eventId,
+                leagueId: doc.leagueId,
+                bet: {
+                  market: marketEntry.marketType,
+                  marketName: marketEntry.marketName,
+                  direction,
+                  line: lineEntry.point,
+                  price: offer.price,
+                  bookmakerId: offer.bookmakerId,
+                  bookmakerName: offer.bookmakerName,
+                  sourceType: offer.sourceType,
+                },
+                sampleSize: trend.sampleSize,
+                performance: {
+                  wins: trend.wins,
+                  losses: trend.losses,
+                  pushes: trend.pushes,
+                  hitRate: trend.hitRate,
+                  stake: trend.stake,
+                },
+                profit: trend.profit,
+              }
+
+              const currentBest = bestTrendByPlayer.get(player.playerId)
+              if (
+                !currentBest
+                || candidate.profit > currentBest.profit
+                || (candidate.profit === currentBest.profit && candidate.performance.hitRate > currentBest.performance.hitRate)
+                || (candidate.profit === currentBest.profit
+                  && candidate.performance.hitRate === currentBest.performance.hitRate
+                  && candidate.sampleSize > currentBest.sampleSize)
+              ) {
+                bestTrendByPlayer.set(player.playerId, candidate)
+              }
+            }
+          }
+        }
+      }
+    }
+
+    const results = [...bestTrendByPlayer.values()].sort((a, b) => {
+      if (b.profit !== a.profit) return b.profit - a.profit
+      if (b.performance.hitRate !== a.performance.hitRate) return b.performance.hitRate - a.performance.hitRate
+      if (b.sampleSize !== a.sampleSize) return b.sampleSize - a.sampleSize
+      return a.player.name.localeCompare(b.player.name)
+    })
+
+    const total = results.length
+    const paginated = results.slice((pageNum - 1) * pageSize, pageNum * pageSize)
+
+    return success(paginated, {
+      count: paginated.length,
+      total,
+      page: pageNum,
+      pages: Math.ceil(total / pageSize),
+      window: windowSize,
+      stake: 100,
+      ...(league && { league }),
+      ...(bookmaker && { bookmaker }),
+      sourceType,
+    })
+  })
+
   // GET /v1/players/:playerId/analysis
   // Returns integrated player data: best bet + game chart data + hit rates.
   // Query params: market (required), window (l5|l10|l25|season, default l5)
@@ -596,7 +913,7 @@ export default async function playerRoutes(fastify) {
       .slice()
       .reverse() // chronological order for chart
       .map((g) => {
-        const val = fields ? sumStatFieldsForChart(g.stats, fields) : null
+        const val = fields ? sumStatFieldsForGame(g.stats, fields) : null
         return {
           gameDate: g.gameDate,
           opponent: g.opponent,
@@ -622,19 +939,4 @@ export default async function playerRoutes(fastify) {
       { league: leagueId, market }
     )
   })
-}
-
-// Inline helper so the analysis handler can compute stat values for chart display
-function sumStatFieldsForChart(stats, fields) {
-  if (!stats || !fields?.length) return null
-  let total = 0
-  let found = false
-  for (const field of fields) {
-    const val = stats[field]
-    if (typeof val === 'number' && Number.isFinite(val)) {
-      total += val
-      found = true
-    }
-  }
-  return found ? total : null
 }
