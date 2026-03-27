@@ -63,7 +63,7 @@ export default function RateLimitsPage() {
             <tr className="border-t border-[#e8e8e8] bg-[#faf9f6]">
               <td className="px-4 py-2.5 font-medium text-[#1a1a1a]">Business</td>
               <td className="px-4 py-2.5">5,000,000</td>
-              <td className="px-4 py-2.5">500</td>
+              <td className="px-4 py-2.5">1,000</td>
               <td className="px-4 py-2.5">All</td>
               <td className="px-4 py-2.5">Yes</td>
               <td className="px-4 py-2.5">$299/mo</td>

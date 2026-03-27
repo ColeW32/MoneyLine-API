@@ -48,7 +48,7 @@ export const TIERS = {
     label: 'Business',
     rank: 3,
     creditsPerMonth: 5_000_000,
-    requestsPerMinute: 500,
+    requestsPerMinute: 1_000,
     priceMonthly: 299,
     overageRate: 0.00015,
     stripePriceId: null,

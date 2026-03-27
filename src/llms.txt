@@ -25,7 +25,7 @@ Keys are created in the dashboard at https://www.moneylineapp.com/dashboard/keys
 | Free | $0 | 1,000 | 10 | — | — | — | — | — |
 | Starter | $29 | 150,000 | 60 | 1 venue (sportsbook, DFS, or exchange after filtering) | — | — | Yes | — |
 | Pro | $149 | 1,500,000 | 200 | All sportsbooks + DFS + exchanges | Yes | Yes | Yes | Yes |
-| Business | $299 | 5,000,000 | 500 | All sportsbooks + DFS + exchanges | Yes | Yes | Yes | Yes |
+| Business | $299 | 5,000,000 | 1,000 | All sportsbooks + DFS + exchanges | Yes | Yes | Yes | Yes |
 | Enterprise | Custom | Unlimited | Unlimited | All sportsbooks + DFS + exchanges | Yes | Yes | Yes | Yes |
 
 Odds coverage includes sportsbooks from the `us` and `us2` regions, DFS pick'em platforms from the `us_dfs` region (e.g. PrizePicks, Underdog, DraftKings Pick6, Betr Picks), plus exchanges and prediction markets from the `us_ex` region (e.g. Sporttrade, Kalshi, Betfair Exchange US). The default `sourceType=all` on odds and edge endpoints returns all venue types, and you can narrow to `sportsbook`, `dfs`, or `exchange` as needed. DFS prices are normalized into American odds for comparison, but remain indicative because DFS multipliers can vary by card composition.

@@ -560,7 +560,7 @@ export default function LandingPage() {
               </p>
               <p className="text-xs ml-text-gray mt-1 mb-4">5M credits/mo</p>
               <ul className="space-y-2 flex-1">
-                {['Everything in Pro', '500 req/min', 'Overage billing', 'Unlimited history', 'Priority support'].map((f) => (
+                {['Everything in Pro', '1,000 req/min', 'Overage billing', 'Unlimited history', 'Priority support'].map((f) => (
                   <li key={f} className="flex items-start gap-1.5 text-xs ml-text-muted">
                     <span className="text-green-500 mt-0.5">&#10003;</span> {f}
                   </li>
