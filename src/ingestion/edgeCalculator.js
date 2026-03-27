@@ -105,9 +105,15 @@ function collectPropositions(bookmakers) {
   return propositions
 }
 
+function isArbitrageEligibleBookmaker(bookmaker) {
+  return bookmaker?.sourceType
+    && bookmaker.sourceType !== 'unknown'
+    && bookmaker.sourceType !== 'exchange'
+}
+
 /**
  * Determine the venueType of an arb edge from its participating legs.
- * Returns 'sportsbook', 'dfs', 'exchange', or 'mixed'.
+ * Returns 'sportsbook', 'dfs', or 'mixed'.
  */
 function arbVenueType(legs) {
   const types = new Set(legs.map((l) => l.sourceType).filter((t) => t && t !== 'unknown'))
@@ -118,14 +124,14 @@ function arbVenueType(legs) {
 
 /**
  * Detect arbitrage opportunities across bookmakers.
- * Only considers bookmakers with a known sourceType (excludes 'unknown').
+ * Only considers non-exchange bookmakers with a known sourceType.
  * Each edge is tagged with venueType for downstream filtering.
  *
  * Exported for testing.
  */
 export function detectArbitrage(bookmakers) {
   const edges = []
-  const propositions = collectPropositions(bookmakers)
+  const propositions = collectPropositions(bookmakers.filter(isArbitrageEligibleBookmaker))
 
   for (const proposition of propositions.values()) {
     if (proposition.selections.size !== 2) continue

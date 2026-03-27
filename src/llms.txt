@@ -28,7 +28,7 @@ Keys are created in the dashboard at https://www.moneylineapp.com/dashboard/keys
 | Business | $299 | 5,000,000 | 1,000 | All sportsbooks + DFS + exchanges | Yes | Yes | Yes | Yes |
 | Enterprise | Custom | Unlimited | Unlimited | All sportsbooks + DFS + exchanges | Yes | Yes | Yes | Yes |
 
-Odds coverage includes sportsbooks from the `us` and `us2` regions, DFS pick'em platforms from the `us_dfs` region (e.g. PrizePicks, Underdog, DraftKings Pick6, Betr Picks), plus exchanges and prediction markets from the `us_ex` region (e.g. Sporttrade, Kalshi, Betfair Exchange US). The default `sourceType=all` on odds and edge endpoints returns all venue types, and you can narrow to `sportsbook`, `dfs`, or `exchange` as needed. DFS prices are normalized into American odds for comparison, but remain indicative because DFS multipliers can vary by card composition.
+Odds coverage includes sportsbooks from the `us` and `us2` regions, DFS pick'em platforms from the `us_dfs` region (e.g. PrizePicks, Underdog, DraftKings Pick6, Betr Picks), plus exchanges and prediction markets from the `us_ex` region (e.g. Sporttrade, Kalshi, Betfair Exchange US). The default `sourceType=all` on odds endpoints returns all venue types, and on edge endpoints it returns all supported edge venues; arbitrage excludes exchanges while value/EV can still be narrowed to `sportsbook`, `dfs`, or `exchange`. DFS prices are normalized into American odds for comparison, but remain indicative because DFS multipliers can vary by card composition.
 
 - **1 credit = 1 API request** (account-level, shared across all keys)
 - **Business tier** supports overage billing at $0.00015/credit beyond the limit
@@ -827,8 +827,8 @@ Browse edge opportunities (arbitrage, value bets, positive EV).
 **sourceType behavior for edge endpoints:**
 - `sportsbook` — sportsbook-only arbs + sportsbook value/EV bets.
 - `dfs` — DFS-only arbs + DFS value/EV bets.
-- `exchange` — exchange-only arbs + exchange value/EV bets.
-- `all` (default) — all edges including mixed arbitrage across sportsbooks, DFS, and exchanges.
+- `exchange` — exchange value/EV bets only. Arbitrage excludes exchanges.
+- `all` (default) — all edges including mixed arbitrage across sportsbooks and DFS.
 
 **Arbitrage edge payload:**
 ```json
@@ -1048,7 +1048,7 @@ curl -H "x-api-key: ml_live_YOUR_KEY" \
   "https://mlapi.bet/v1/edge/arbitrage?league=nba&minProfit=1"
 ```
 
-### Get exchange-inclusive arbitrage (Pro+)
+### Get all arbitrage opportunities (including sportsbook/DFS mixed)
 
 ```bash
 curl -H "x-api-key: ml_live_YOUR_KEY" \

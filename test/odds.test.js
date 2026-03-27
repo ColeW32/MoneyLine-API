@@ -292,14 +292,23 @@ test('detectArbitrage tags sportsbook-only arb with venueType=sportsbook', () =>
   assert.equal(edges[0].venueType, 'sportsbook')
 })
 
-test('detectArbitrage tags mixed arb with venueType=mixed', () => {
+test('detectArbitrage tags sportsbook/dfs arb with venueType=mixed', () => {
   const bookmakers = makeBookmakers([
     { key: 'draftkings', sourceType: 'sportsbook',         sourceRegion: 'us',    prices: [+200, -250] },
-    { key: 'sporttrade', sourceType: 'exchange',            sourceRegion: 'us_ex', prices: [-250, +200] },
+    { key: 'prizepicks', sourceType: 'dfs',                sourceRegion: 'us_dfs', prices: [-250, +200] },
   ])
   const edges = detectArbitrage(bookmakers)
   assert.equal(edges.length, 1)
   assert.equal(edges[0].venueType, 'mixed')
+})
+
+test('detectArbitrage excludes exchange bookmakers entirely', () => {
+  const bookmakers = makeBookmakers([
+    { key: 'draftkings', sourceType: 'sportsbook', sourceRegion: 'us',    prices: [+200, -250] },
+    { key: 'kalshi',     sourceType: 'exchange',   sourceRegion: 'us_ex', prices: [-250, +200] },
+  ])
+  const edges = detectArbitrage(bookmakers)
+  assert.equal(edges.length, 0)
 })
 
 test('detectArbitrage excludes unknown sourceType bookmakers', () => {
@@ -414,7 +423,7 @@ test('default edge filter (sportsbook) excludes exchange-only and mixed arbs', (
   assert.ok(filtered.every((e) => e.venueType === 'sportsbook' || e.sourceType === 'sportsbook'))
 })
 
-test('sourceType=all includes mixed sportsbook/exchange arbs', () => {
+test('sourceType=all includes mixed arbitrage edges when present', () => {
   const edges = [
     { type: 'arbitrage', venueType: 'mixed' },
     { type: 'arbitrage', venueType: 'sportsbook' },

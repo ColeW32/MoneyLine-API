@@ -8,7 +8,7 @@ const ENDPOINTS = [
     method: 'GET',
     path: '/v1/edge/arbitrage',
     label: 'Live arb opportunities',
-    example: `GET  /v1/edge/arbitrage?league=nba&sourceType=all
+    example: `GET  /v1/edge/arbitrage?league=nba&minProfit=1
 
 // Response
 {
@@ -19,13 +19,13 @@ const ENDPOINTS = [
       "leagueId": "nba",
       "sport": "basketball",
       "type": "arbitrage",
-      "venueType": "mixed",
+      "venueType": "sportsbook",
       "market": "moneyline",
       "outcome": "Boston Celtics vs Los Angeles Lakers",
       "arbitrage": {
         "books": [
           { "bookmaker": "DraftKings", "sourceType": "sportsbook", "outcome": "Boston Celtics", "odds": -175, "stake": 514.71 },
-          { "bookmaker": "Kalshi", "sourceType": "exchange", "outcome": "Los Angeles Lakers", "odds": 185, "stake": 485.29 }
+          { "bookmaker": "FanDuel", "sourceType": "sportsbook", "outcome": "Los Angeles Lakers", "odds": 185, "stake": 485.29 }
         ],
         "profitPct": 1.32,
         "guaranteedProfit": 13.2,

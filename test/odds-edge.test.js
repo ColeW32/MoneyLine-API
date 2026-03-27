@@ -94,17 +94,24 @@ test('detectEdges emits both value and ev edges for strong positive-EV offers', 
   assert.ok(targetEdges.some((edge) => edge.type === 'ev'))
 })
 
-test('detectArbitrage tags mixed sportsbook/exchange arbs and source filtering respects defaults', () => {
-  const arbitrageEdges = detectArbitrage([
+test('detectArbitrage excludes exchange arbs and still allows mixed sportsbook/dfs arbs', () => {
+  const exchangeArbitrageEdges = detectArbitrage([
     makeMoneylineBook('fanduel', 'FanDuel', 'sportsbook', 'us', +105, -120),
     makeMoneylineBook('kalshi', 'Kalshi', 'exchange', 'us_ex', -120, +105),
+  ])
+
+  assert.equal(exchangeArbitrageEdges.length, 0)
+
+  const arbitrageEdges = detectArbitrage([
+    makeMoneylineBook('fanduel', 'FanDuel', 'sportsbook', 'us', +105, -120),
+    makeMoneylineBook('prizepicks', 'PrizePicks', 'dfs', 'us_dfs', -120, +105),
   ])
 
   assert.equal(arbitrageEdges.length, 1)
   assert.equal(arbitrageEdges[0].venueType, 'mixed')
   assert.deepEqual(
     arbitrageEdges[0].arbitrage.books.map((leg) => leg.sourceType).sort(),
-    ['exchange', 'sportsbook']
+    ['dfs', 'sportsbook']
   )
 
   assert.equal(filterEdgesBySourceType(arbitrageEdges, 'sportsbook').length, 0)
