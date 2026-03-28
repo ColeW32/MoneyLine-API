@@ -84,6 +84,49 @@ function escapeRegex(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
+/**
+ * Enrich player entries across one or more filtered player-props docs
+ * with teamAbbr and teamName from the players + teams collections.
+ * Mutates each player entry in-place and returns the docs array.
+ */
+async function enrichPlayersWithTeam(docs) {
+  const playerIds = [...new Set(
+    docs.flatMap((doc) => (doc.players || []).map((p) => p.playerId).filter(Boolean))
+  )]
+  if (playerIds.length === 0) return docs
+
+  const playerDocs = await getCollection('players')
+    .find(
+      { playerId: { $in: playerIds } },
+      { projection: { _id: 0, playerId: 1, teamId: 1 } }
+    )
+    .toArray()
+
+  const teamIds = [...new Set(playerDocs.map((p) => p.teamId).filter(Boolean))]
+  const teamDocs = teamIds.length > 0
+    ? await getCollection('teams')
+        .find(
+          { teamId: { $in: teamIds } },
+          { projection: { _id: 0, teamId: 1, abbreviation: 1, name: 1 } }
+        )
+        .toArray()
+    : []
+
+  const teamIdByPlayer = new Map(playerDocs.map((p) => [p.playerId, p.teamId]))
+  const teamById = new Map(teamDocs.map((t) => [t.teamId, t]))
+
+  for (const doc of docs) {
+    for (const playerEntry of doc.players || []) {
+      const teamId = teamIdByPlayer.get(playerEntry.playerId) || null
+      const team = teamId ? teamById.get(teamId) : null
+      playerEntry.teamAbbr = team?.abbreviation || null
+      playerEntry.teamName = team?.name || null
+    }
+  }
+
+  return docs
+}
+
 export function buildPlayerPropsMarketCatalog(league = null) {
   const leagueIds = league ? [league] : Object.keys(SPORTS)
 
@@ -163,6 +206,8 @@ export default async function playerPropsRoutes(fastify) {
       .map((doc) => filterPlayerPropsDoc(doc, { market, player, playerId, bookmaker, sourceType }))
       .filter(Boolean)
 
+    await enrichPlayersWithTeam(results)
+
     return success(results, { count: results.length, page: pageNum })
   })
 
@@ -208,6 +253,7 @@ export default async function playerPropsRoutes(fastify) {
       return reply.code(404).send(error(`Player props for event '${eventId}' not found.`, 404))
     }
 
+    await enrichPlayersWithTeam([filtered])
     annotateLinesSummary(filtered.players)
 
     return success(filtered, { league: filtered.leagueId, event: eventId })

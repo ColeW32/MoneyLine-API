@@ -202,7 +202,18 @@ export default async function playerRoutes(fastify) {
       return reply.code(404).send(error(`Player '${playerId}' not found.`, 404))
     }
 
-    return success(player, { league: player.leagueId })
+    let teamAbbr = null
+    let teamName = null
+    if (player.teamId) {
+      const teamDoc = await getCollection('teams').findOne(
+        { teamId: player.teamId },
+        { projection: { _id: 0, abbreviation: 1, name: 1 } }
+      )
+      teamAbbr = teamDoc?.abbreviation || null
+      teamName = teamDoc?.name || null
+    }
+
+    return success({ ...player, teamAbbr, teamName }, { league: player.leagueId })
   })
 
   // GET /v1/players/:playerId/stats
@@ -544,6 +555,17 @@ export default async function playerRoutes(fastify) {
       hitRateDocs.map((h) => [`${h.playerId}:${h.line}`, h])
     )
 
+    const trendingTeamIds = new Set(playerDocs.map((p) => p.teamId).filter(Boolean))
+    const trendingTeamDocs = trendingTeamIds.size > 0
+      ? await getCollection('teams')
+          .find(
+            { teamId: { $in: [...trendingTeamIds] } },
+            { projection: { _id: 0, teamId: 1, abbreviation: 1, name: 1 } }
+          )
+          .toArray()
+      : []
+    const trendingTeamsById = new Map(trendingTeamDocs.map((t) => [t.teamId, t]))
+
     // Assemble results
     const sortKey = sortBy.toUpperCase()
     const results = []
@@ -552,6 +574,7 @@ export default async function playerRoutes(fastify) {
       const meta = playerMeta.get(pid) || {}
       const hrKey = `${pid}:${entry.bestLine}`
       const hr = hitRateMap.get(hrKey)
+      const team = trendingTeamsById.get(meta.teamId)
 
       const sortRate = hr?.[sortKey]?.rate ?? null
 
@@ -559,6 +582,8 @@ export default async function playerRoutes(fastify) {
         playerId: pid,
         playerName: entry.playerName || meta.playerName,
         teamId: meta.teamId || null,
+        teamAbbr: team?.abbreviation || null,
+        teamName: team?.name || null,
         position: meta.position || null,
         eventId: entry.eventId,
         market,
@@ -821,6 +846,8 @@ export default async function playerRoutes(fastify) {
                   playerId: player.playerId,
                   name: player.playerName || meta.playerName,
                   teamId: meta.teamId || null,
+                  teamAbbr: team?.abbreviation || null,
+                  teamName: team?.name || null,
                   team: team?.abbreviation || team?.name || null,
                   matchup: buildMatchup(event, teamsById),
                 },

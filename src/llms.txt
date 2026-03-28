@@ -357,6 +357,9 @@ Get detailed info for a player.
 
 **Tier:** Free
 
+**Notes:**
+- Response includes all stored player fields plus `teamAbbr` (e.g. `"NYK"`) and `teamName` (e.g. `"New York Knicks"`) looked up from the teams collection via the player's `teamId`.
+
 ---
 
 #### GET /v1/players/:playerId/stats
@@ -456,6 +459,8 @@ Get players sorted by hit rate, paired with their best available prop line and o
       "playerId": "nba-p-4065648",
       "playerName": "Coby White",
       "teamId": "nba-cha",
+      "teamAbbr": "CHA",
+      "teamName": "Charlotte Hornets",
       "position": "PG",
       "eventId": "nba-ev-311286",
       "market": "player_points",
@@ -503,6 +508,8 @@ Get each player's highest-profit active prop trend over a rolling game window. T
         "playerId": "nba-p-4065648",
         "name": "Coby White",
         "teamId": "nba-chi",
+        "teamAbbr": "CHI",
+        "teamName": "Chicago Bulls",
         "team": "CHI",
         "matchup": "CHI @ NYK"
       },
@@ -741,6 +748,7 @@ Browse player props grouped by event, player, market, and line.
 **Notes:**
 - Results are paginated at the event level.
 - Each player entry includes a `playerId` matching the ID returned by `/v1/players` and `/v1/players/:playerId/stats`.
+- Each player entry includes `teamAbbr` (e.g. `"NYK"`) and `teamName` (e.g. `"New York Knicks"`) for display purposes.
 - Players that could not be resolved onto a canonical `playerId` are omitted from public player-props responses so every returned player remains joinable.
 - `playerId` and `player` can be combined with `market`, `bookmaker`, and `sourceType`.
 - Starter tier sees 1 venue per event after filtering because the underlying odds feed follows the same venue-slicing rules.
@@ -760,6 +768,8 @@ Browse player props grouped by event, player, market, and line.
         {
           "playerName": "Jayson Tatum",
           "playerId": "nba-p-4065648",
+          "teamAbbr": "BOS",
+          "teamName": "Boston Celtics",
           "markets": [
             {
               "marketType": "player_points",

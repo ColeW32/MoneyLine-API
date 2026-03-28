@@ -60,13 +60,20 @@ Stub cleanup logic lives in `ingestion/scheduler.js`. The deduplication key is (
 - **DFS excluded from arbitrage**: DFS operators (`sourceType: 'dfs'` — PrizePicks, Underdog, DraftKings Pick6, Betr Picks) are excluded from arbitrage calculations. Their prices are normalized into American odds but are indicative, not tradeable lines, so including them produces false arbitrage signals. DFS is still included in value and EV calculations.
 - Exchange participation in arbitrage is limited to the `ARBITRAGE_EXCHANGE_ALLOWLIST` (ProphetX, Novig), and all exchange offers are sanity-checked against a sportsbook-only consensus before they can form arb legs.
 
+## Team fields on player responses
+
+The following endpoints enrich player entries with `teamAbbr` and `teamName` looked up from the `teams` collection via the player's `teamId`:
+
+- `/v1/players/:playerId` — top-level `teamAbbr` and `teamName` fields on the player object
+- `/v1/players/trending` — `teamAbbr` and `teamName` per result entry
+- `/v1/players/trends` — `teamAbbr` and `teamName` on the nested `player` object (alongside the legacy `team` field which is kept for backward compat)
+- `/v1/player-props` and `/v1/events/:eventId/player-props` — `teamAbbr` and `teamName` on each player entry within the `players` array
+
 ## Game log fields
 
 When returning `type=game` player stats, each game log entry includes:
 - `gameDateDisplay` — formatted date string (e.g. `"Mar 14"`) for display
 - `opponentAbbr` — opponent team abbreviation (e.g. `"LAL"`)
-
-These fields are also included in the `/v1/players/:playerId/analysis` chart data.
 
 ## External API reference
 
