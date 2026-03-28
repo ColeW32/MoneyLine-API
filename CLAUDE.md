@@ -1,6 +1,6 @@
 # MoneyLine API — Developer Reference
 
-Node.js/Express REST API serving sports odds, player props, hit rates, edge data, and live scores. Data is sourced from GoalServe (canonical events, scores, rosters, stats) and The Odds API (odds, player props, future game seeding).
+Node.js/Express REST API serving sports odds, player props, hit rates, edge data, and live scores. Data is sourced from our stats provider (canonical events, scores, rosters, stats) and our odds provider (odds, player props, future game seeding).
 
 ## Key directories
 
@@ -11,12 +11,12 @@ src/
   db.js                  — Postgres client (pg)
   routes/                — Route handlers (events, odds, players, etc.)
   ingestion/
-    scheduler.js         — All cron jobs (odds fetch, GoalServe sync, stub cleanup, enrichment)
-    fetchers/            — GoalServe + Odds API fetch logic
+    scheduler.js         — All cron jobs (odds fetch, stats sync, stub cleanup, enrichment)
+    fetchers/            — Stats and odds data fetch logic
     normalizers/         — Transform raw data into canonical DB schema
     hitRateCalculator.js — Computes L5/L10/L25/season hit rates from game logs
     bookmakerCatalog.js  — Canonical bookmaker list + alias map
-    idMapper.js          — GoalServe ↔ internal ID mapping
+    idMapper.js          — External ↔ internal ID mapping
     playerIdentityResolver.js — Fuzzy player name → canonical playerId
   middleware/            — Auth, rate limiting, tier enforcement
   utils/                 — Shared helpers (response, hash, canonical events, etc.)
@@ -31,13 +31,13 @@ src/
 
 ## Event ingestion & stub events
 
-GoalServe is the canonical source for events. However, The Odds API often has odds for games before GoalServe picks them up. To avoid returning 404s for valid event IDs in odds responses, a **stub event** is created from Odds API data:
+Stats data is the canonical source for events. However, odds data often arrives for games before stats data picks them up. To avoid returning 404s for valid event IDs in odds responses, a **stub event** is created from odds data:
 
 - Stubs have `isStub: true` in all event responses.
 - Stubs are enriched with team IDs at creation time via `idMapper.js`.
 - A periodic enrichment job runs every 30 minutes to backfill team IDs on any stubs that were created without them.
-- A daily GoalServe schedule sync runs every 6 hours.
-- When a canonical GoalServe event arrives for the same game, the stub is deleted and all references (odds, props) are migrated to the canonical event ID.
+- A daily schedule sync runs every 6 hours.
+- When a canonical stats event arrives for the same game, the stub is deleted and all references (odds, props) are migrated to the canonical event ID.
 
 Stub cleanup logic lives in `ingestion/scheduler.js`. The deduplication key is (league, homeTeam, awayTeam, date).
 
@@ -51,7 +51,7 @@ Stub cleanup logic lives in `ingestion/scheduler.js`. The deduplication key is (
 
 ## Bookmaker catalog
 
-`ingestion/bookmakerCatalog.js` maps raw Odds API bookmaker keys to canonical `bookmakerId` values. Aliases are supported — e.g. `hardrockbet` maps to `hardrock_bet`. When filtering by bookmaker in any endpoint, both the canonical key and any alias are accepted.
+`ingestion/bookmakerCatalog.js` maps raw bookmaker keys to canonical `bookmakerId` values. Aliases are supported — e.g. `hardrockbet` maps to `hardrock_bet`. When filtering by bookmaker in any endpoint, both the canonical key and any alias are accepted.
 
 ## Edge calculator
 
@@ -77,7 +77,7 @@ When returning `type=game` player stats, each game log entry includes:
 
 ## External API reference
 
-See `src/config/goalserve-api.md` for GoalServe endpoint documentation including sport-specific quirks (attribute prefixes, team abbreviation mappings for relocated franchises, etc.).
+See `src/config/stats-api.md` for stats provider endpoint documentation including sport-specific quirks (attribute prefixes, team abbreviation mappings for relocated franchises, etc.).
 
 ## User-facing API reference
 

@@ -139,7 +139,7 @@ Get a single league by ID.
 
 #### Stub Events
 
-Some events appear in the API before GoalServe has ingested the game. These **stub events** are seeded from Odds API data and carry an `isStub: true` flag. Stubs are enriched with team IDs when available and are automatically replaced by canonical GoalServe events once they are ingested — the `eventId` remains stable through this transition. A daily schedule sync (every 6 hours) and a periodic enrichment job (every 30 minutes) keep stubs up to date. Client code should treat `isStub: true` events as fully usable but potentially missing some boxscore and play-by-play data.
+Some events appear in the API before stats data has been ingested for the game. These **stub events** are seeded from odds data and carry an `isStub: true` flag. Stubs are enriched with team IDs when available and are automatically replaced by canonical events once stats data is ingested — the `eventId` remains stable through this transition. A daily schedule sync (every 6 hours) and a periodic enrichment job (every 30 minutes) keep stubs up to date. Client code should treat `isStub: true` events as fully usable but potentially missing some boxscore and play-by-play data.
 
 #### GET /v1/events
 List events with filtering and pagination.

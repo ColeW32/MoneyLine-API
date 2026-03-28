@@ -1,4 +1,4 @@
-# GoalServe API Reference
+# Stats API Reference
 
 Base URL: `http://www.goalserve.com/getfeed/ce2721a47001465b850508dbc370ae49`
 Append `?json=1` for JSON output. Default is XML.
@@ -72,11 +72,11 @@ baseball/{abbr}_injuries                     Team injuries
 baseball/usa?playerimage=15826               Player image by player ID
 ```
 
-### MLB GoalServe Team Abbreviations
+### MLB Provider Team Abbreviations
 Several differ from standard team codes:
 
-| Standard | GoalServe | Team |
-|----------|-----------|------|
+| Standard | Provider | Team |
+|----------|----------|------|
 | cws | **chw** | Chicago White Sox |
 | kc  | **kan** | Kansas City Royals |
 | mia | **fla** | Miami Marlins (was Florida Marlins) |
@@ -114,7 +114,7 @@ bsktbl/usa?playerimage=2011                  Player image by player ID
 ### NBA Team Abbreviations
 `atl`, `bos`, `cha`, `chi`, `cle`, `dal`, `den`, `det`, `gs`, `hou`, `ind`, `lac`, `lal`, `mem`, `mia`, `mil`, `min`, `nj`, `no`, `ny`, `okc`, `orl`, `phi`, `phx`, `por`, `sac`, `sa`, `tor`, `utah`, `wsh`
 
-> **NBA JSON note**: Players sit directly under `team.player` (no position nesting). Each player has a `oddname` field (Odds API name variant) in addition to `name`.
+> **NBA JSON note**: Players sit directly under `team.player` (no position nesting). Each player has a `oddname` field (alternate name variant) in addition to `name`.
 
 ### NCAA Basketball
 ```
@@ -148,11 +148,11 @@ hockey/{abbr}_stats                          Team stats
 hockey/{abbr}_injuries                       Team injuries
 ```
 
-### NHL GoalServe Team Abbreviations
+### NHL Provider Team Abbreviations
 Relocated teams use old city names:
 
-| Standard | GoalServe | Team |
-|----------|-----------|------|
+| Standard | Provider | Team |
+|----------|----------|------|
 | wpg | **atl** | Winnipeg Jets (was Atlanta Thrashers) |
 | ari | **phx** | Utah Hockey Club (was Phoenix/Arizona Coyotes) |
 | vgk | **vgs** | Vegas Golden Knights |
