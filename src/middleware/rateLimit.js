@@ -2,9 +2,11 @@ import { getRedis } from '../redis.js'
 import { error } from '../utils/response.js'
 
 /**
- * Per-minute sliding-window rate limiter using Upstash Redis.
- * Protects against burst abuse. Credit-based monthly limits are
- * handled separately by creditCheck middleware.
+ * Per-minute fixed-window rate limiter using Upstash Redis.
+ * Uses INCR + conditional EXPIRE (2 commands) instead of the sliding-window
+ * approach (4 commands). Burst at window boundaries is acceptable given
+ * the permissive per-minute limits.
+ * Credit-based monthly limits are handled separately by creditCheck middleware.
  */
 export async function perMinuteRateLimit(request, reply) {
   const { tierConfig, apiKey } = request
@@ -15,21 +17,16 @@ export async function perMinuteRateLimit(request, reply) {
 
   const redis = getRedis()
   const keyId = apiKey._id
-  const now = Date.now()
+  const windowMinute = Math.floor(Date.now() / 60_000)
+  const minuteKey = `rl:min:${keyId}:${windowMinute}`
 
-  const minuteKey = `rl:min:${keyId}`
-  const windowStart = now - 60_000
+  const count = await redis.incr(minuteKey)
+  if (count === 1) {
+    // Set TTL on first request of this window (fire-and-forget)
+    redis.expire(minuteKey, 120).catch(() => {})
+  }
 
-  // Use a pipeline: remove old entries, add current, count, set expiry
-  const pipe = redis.pipeline()
-  pipe.zremrangebyscore(minuteKey, 0, windowStart)
-  pipe.zadd(minuteKey, { score: now, member: `${now}:${Math.random()}` })
-  pipe.zcard(minuteKey)
-  pipe.expire(minuteKey, 120)
-  const results = await pipe.exec()
-
-  const minuteCount = results[2]
-  if (minuteCount > tierConfig.requestsPerMinute) {
+  if (count > tierConfig.requestsPerMinute) {
     reply.header('Retry-After', '60')
     return reply.code(429).send(
       error(`Rate limit exceeded. ${tierConfig.requestsPerMinute} requests/minute allowed on ${tierConfig.label} tier.`, 429)

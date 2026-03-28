@@ -38,20 +38,22 @@ export default async function adminRoutes(fastify) {
 
     // Supplement with real-time Redis credit counts where available
     const redis = getRedis()
-    const enriched = await Promise.all(
-      topUsers.map(async (u) => {
-        const redisCredits = await redis.get(`credits:${u.supabaseId}`)
-        const creditsUsed = parseInt(redisCredits) || u.creditsUsedThisPeriod || 0
-        const tierConfig = getTierConfig(u.tier || 'free')
-        return {
-          id: u.supabaseId,
-          email: u.email,
-          tier: u.tier || 'free',
-          creditsUsed,
-          creditsLimit: tierConfig.creditsPerMonth,
-        }
-      })
-    )
+    const pipe = redis.pipeline()
+    for (const u of topUsers) {
+      pipe.get(`credits:${u.supabaseId}`)
+    }
+    const creditResults = await pipe.exec()
+    const enriched = topUsers.map((u, i) => {
+      const creditsUsed = parseInt(creditResults[i]) || u.creditsUsedThisPeriod || 0
+      const tierConfig = getTierConfig(u.tier || 'free')
+      return {
+        id: u.supabaseId,
+        email: u.email,
+        tier: u.tier || 'free',
+        creditsUsed,
+        creditsLimit: tierConfig.creditsPerMonth,
+      }
+    })
 
     // Sort by actual credits used after Redis enrichment
     enriched.sort((a, b) => b.creditsUsed - a.creditsUsed)

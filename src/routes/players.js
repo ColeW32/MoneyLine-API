@@ -10,7 +10,7 @@ import {
 } from '../ingestion/hitRateCalculator.js'
 import { americanToDecimal } from '../utils/odds.js'
 
-const PLAYER_TRENDS_CACHE_TTL_SECONDS = 300
+const PLAYER_TRENDS_CACHE_TTL_SECONDS = 1800
 const PLAYER_TRENDS_CACHE_VERSION = 2
 
 function parseDateBoundary(value, endOfDay = false) {

@@ -3,11 +3,38 @@ import { getCollection } from '../db.js'
 import { getTierConfig, getNextTier } from '../config/tiers.js'
 import { error } from '../utils/response.js'
 
-const USER_CACHE_TTL = 60 // 1 minute
+// In-memory credit buffer: batches INCR calls and flushes via INCRBY every 5s
+const creditBuffer = new Map() // userId -> { pending, lastFlushed }
+const CREDIT_FLUSH_INTERVAL_MS = 5_000
+
+function scheduleFlush(userId, creditKey) {
+  const entry = creditBuffer.get(userId)
+  if (entry.flushTimer) return
+  entry.flushTimer = setTimeout(async () => {
+    const toFlush = entry.pending
+    entry.pending = 0
+    entry.flushTimer = null
+    if (toFlush <= 0) return
+    try {
+      const redis = getRedis()
+      const newCount = await redis.incrby(creditKey, toFlush)
+      // Set TTL if this is the first credit of the period
+      if (newCount <= toFlush) {
+        const endOfMonth = new Date()
+        endOfMonth.setMonth(endOfMonth.getMonth() + 1, 1)
+        endOfMonth.setHours(0, 0, 0, 0)
+        const ttl = Math.ceil((endOfMonth.getTime() - Date.now()) / 1000)
+        await redis.expire(creditKey, ttl)
+      }
+    } catch (err) {
+      console.error('[creditCheck] Flush error:', err)
+    }
+  }, CREDIT_FLUSH_INTERVAL_MS)
+}
 
 /**
  * Account-level credit check middleware.
- * Tracks credits per userId (not per API key) using Redis INCR.
+ * Tracks credits per userId (not per API key) using a batched Redis INCRBY.
  * Handles: credit enforcement, overage tracking, auto-upgrade stub.
  */
 export async function creditCheck(request, reply) {
@@ -23,17 +50,18 @@ export async function creditCheck(request, reply) {
   const redis = getRedis()
   const creditKey = `credits:${userId}`
 
-  // Atomic increment — returns new count
-  const count = await redis.incr(creditKey)
-
-  // Set TTL on first credit of the period (calendar month for now, billing cycle later with Stripe)
-  if (count === 1) {
-    const endOfMonth = new Date()
-    endOfMonth.setMonth(endOfMonth.getMonth() + 1, 1)
-    endOfMonth.setHours(0, 0, 0, 0)
-    const ttl = Math.ceil((endOfMonth.getTime() - Date.now()) / 1000)
-    await redis.expire(creditKey, ttl)
+  // Buffer the increment locally and get a local estimate of count
+  if (!creditBuffer.has(userId)) {
+    creditBuffer.set(userId, { pending: 0, flushTimer: null })
   }
+  const entry = creditBuffer.get(userId)
+  entry.pending += 1
+  scheduleFlush(userId, creditKey)
+
+  // Read current Redis count + local pending for enforcement decision
+  const redisVal = await redis.get(creditKey)
+  const redisCount = parseInt(redisVal) || 0
+  const count = redisCount + entry.pending
 
   // Attach credit info to request for logging/response headers
   request.creditInfo = { used: count, limit: creditsPerMonth }
