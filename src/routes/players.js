@@ -1,6 +1,6 @@
 import { getCollection } from '../db.js'
 import { getRedis } from '../redis.js'
-import { getCurrentSeason, SPORTS } from '../config/sports.js'
+import { getCurrentSeason, SPORTS, getPlayerPropMarketDefinition } from '../config/sports.js'
 import { success, error } from '../utils/response.js'
 import {
   computeHitRates,
@@ -308,14 +308,6 @@ export default async function playerRoutes(fastify) {
     if (!market) {
       return reply.code(400).send(error('Query param "market" is required (e.g. player_points).', 400))
     }
-    if (line == null || line === '') {
-      return reply.code(400).send(error('Query param "line" is required (e.g. 14.5).', 400))
-    }
-
-    const lineNum = parseFloat(line)
-    if (!Number.isFinite(lineNum)) {
-      return reply.code(400).send(error('Query param "line" must be a number.', 400))
-    }
 
     const player = await getCollection('players').findOne(
       { playerId },
@@ -331,6 +323,23 @@ export default async function playerRoutes(fastify) {
       return reply.code(400).send(
         error(`Market '${market}' is not supported for hit-rate calculation in ${player.leagueId}.`, 400)
       )
+    }
+
+    // Yes/no markets (e.g. player_goal_scorer_anytime) have no line — default to 0.
+    // For all other markets, line is required.
+    const marketDef = getPlayerPropMarketDefinition(player.leagueId, market)
+    const isYesNoOrOverOnly = marketDef?.format === 'yes_no' || marketDef?.format === 'over_only'
+    let lineNum
+    if (line == null || line === '') {
+      if (!isYesNoOrOverOnly) {
+        return reply.code(400).send(error('Query param "line" is required (e.g. 14.5).', 400))
+      }
+      lineNum = 0
+    } else {
+      lineNum = parseFloat(line)
+      if (!Number.isFinite(lineNum)) {
+        return reply.code(400).send(error('Query param "line" must be a number.', 400))
+      }
     }
 
     const rates = await resolveHitRates(playerId, player.leagueId, market, lineNum)
@@ -429,20 +438,29 @@ export default async function playerRoutes(fastify) {
         const marketEntry = (player.markets || []).find((m) => m.marketType === market)
         if (!marketEntry?.lines?.length) continue
 
-        // Find the best line + best odds (highest price) for the direction
+        // Find the best line + best odds (highest price) for the direction.
+        // Yes/no markets (e.g. player_goal_scorer_anytime) have point=null — treat as line=0.
         let bestEntry = null
         for (const lineEntry of marketEntry.lines) {
-          if (lineEntry.point == null) continue
-          const selectionName = direction === 'over' ? 'over' : 'under'
-          const matchingOffers = (lineEntry.offers || []).filter(
-            (o) => String(o.selection || '').toLowerCase() === selectionName
-          )
+          const effectiveLine = lineEntry.point ?? 0
+          let matchingOffers
+          if (lineEntry.point == null) {
+            // Yes/no market: any offer with a finite price counts (player name is the selection)
+            matchingOffers = (lineEntry.offers || []).filter(
+              (o) => o.price != null && Number.isFinite(o.price)
+            )
+          } else {
+            const selectionName = direction === 'over' ? 'over' : 'under'
+            matchingOffers = (lineEntry.offers || []).filter(
+              (o) => String(o.selection || '').toLowerCase() === selectionName
+            )
+          }
           if (matchingOffers.length === 0) continue
 
           const bestOffer = matchingOffers.reduce((a, b) => (b.price > a.price ? b : a))
           if (!bestEntry || bestOffer.price > bestEntry.bestOdds) {
             bestEntry = {
-              line: lineEntry.point,
+              line: effectiveLine,
               bestOdds: bestOffer.price,
               bookmakerId: bestOffer.bookmakerId,
               bookmakerName: bestOffer.bookmakerName,
