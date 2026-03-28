@@ -202,6 +202,8 @@ export function matchExistingEventForOddsDoc(oddsDoc, candidateEvents = []) {
 async function resolveCanonicalOddsEventIds(config, oddsDocs = [], knownEventIdMap = new Map()) {
   if (!Array.isArray(oddsDocs) || oddsDocs.length === 0) return oddsDocs
 
+  let leagueTeamsCache = null
+
   const sourceEventIds = [...new Set(
     oddsDocs
       .map((doc) => doc?._sourceEventId)
@@ -245,6 +247,23 @@ async function resolveCanonicalOddsEventIds(config, oddsDocs = [], knownEventIdM
       // Once GoalServe score/schedule data arrives, the next jobOdds run will find
       // the canonical event (which has homeTeamId) and re-map the odds to it.
       if (doc._sourceHomeTeam && doc._sourceAwayTeam) {
+        // Lazy-load league teams once per resolveCanonicalOddsEventIds call
+        if (!leagueTeamsCache) {
+          leagueTeamsCache = await getCollection('teams')
+            .find({ leagueId: config.leagueId }, { projection: { _id: 0, teamId: 1, teamName: 1 } })
+            .toArray()
+        }
+        const homeCanonical = canonicalizeTeamNameForMatching(doc._sourceHomeTeam)
+        const awayCanonical = canonicalizeTeamNameForMatching(doc._sourceAwayTeam)
+        let stubHomeTeamId = null
+        let stubAwayTeamId = null
+        for (const team of leagueTeamsCache) {
+          const canonical = canonicalizeTeamNameForMatching(team.teamName)
+          if (!stubHomeTeamId && canonical === homeCanonical) stubHomeTeamId = team.teamId
+          if (!stubAwayTeamId && canonical === awayCanonical) stubAwayTeamId = team.teamId
+          if (stubHomeTeamId && stubAwayTeamId) break
+        }
+
         await getCollection('events').updateOne(
           { eventId: doc.eventId },
           {
@@ -258,6 +277,8 @@ async function resolveCanonicalOddsEventIds(config, oddsDocs = [], knownEventIdM
               status: 'scheduled',
               sourceUpdatedAt: new Date(),
               updatedAt: new Date(),
+              ...(stubHomeTeamId && { homeTeamId: stubHomeTeamId }),
+              ...(stubAwayTeamId && { awayTeamId: stubAwayTeamId }),
             },
           },
           { upsert: true }
@@ -1253,6 +1274,75 @@ async function jobSchedule(config) {
   console.log(`[scheduler] Upserted ${ops.length} ${tag} scheduled events`)
 }
 
+async function jobEnrichStubs() {
+  // Find stub events (created from Odds API data) that are still missing team IDs.
+  const stubs = await getCollection('events')
+    .find(
+      {
+        homeTeamName: { $exists: true },
+        $or: [{ homeTeamId: { $exists: false } }, { awayTeamId: { $exists: false } }],
+      },
+      { projection: { _id: 0, eventId: 1, leagueId: 1, homeTeamName: 1, awayTeamName: 1 } }
+    )
+    .toArray()
+
+  if (stubs.length === 0) return
+
+  // Group stubs by leagueId so we load each league's teams only once
+  const byLeague = new Map()
+  for (const stub of stubs) {
+    if (!stub.leagueId) continue
+    if (!byLeague.has(stub.leagueId)) byLeague.set(stub.leagueId, [])
+    byLeague.get(stub.leagueId).push(stub)
+  }
+
+  let enrichedCount = 0
+  for (const [leagueId, leagueStubs] of byLeague) {
+    const teams = await getCollection('teams')
+      .find({ leagueId }, { projection: { _id: 0, teamId: 1, teamName: 1 } })
+      .toArray()
+
+    if (teams.length === 0) continue
+
+    const ops = []
+    for (const stub of leagueStubs) {
+      const homeCanonical = canonicalizeTeamNameForMatching(stub.homeTeamName)
+      const awayCanonical = canonicalizeTeamNameForMatching(stub.awayTeamName)
+
+      let homeTeamId = null
+      let awayTeamId = null
+      for (const team of teams) {
+        const canonical = canonicalizeTeamNameForMatching(team.teamName)
+        if (!homeTeamId && canonical === homeCanonical) homeTeamId = team.teamId
+        if (!awayTeamId && canonical === awayCanonical) awayTeamId = team.teamId
+        if (homeTeamId && awayTeamId) break
+      }
+
+      if (!homeTeamId && !awayTeamId) continue
+
+      const $set = { updatedAt: new Date() }
+      if (homeTeamId) $set.homeTeamId = homeTeamId
+      if (awayTeamId) $set.awayTeamId = awayTeamId
+
+      ops.push({
+        updateOne: {
+          filter: { eventId: stub.eventId },
+          update: { $set },
+        },
+      })
+    }
+
+    if (ops.length > 0) {
+      const result = await getCollection('events').bulkWrite(ops, { ordered: false })
+      enrichedCount += result.modifiedCount
+    }
+  }
+
+  if (enrichedCount > 0) {
+    console.log(`[scheduler] Stub enrichment: resolved team IDs for ${enrichedCount} stub events`)
+  }
+}
+
 // --- Schedule setup ---
 
 function registerLeagueSchedules(leagues) {
@@ -1288,14 +1378,20 @@ function registerLeagueSchedules(leagues) {
       // Rosters: daily at 6 AM ET, 15 minutes apart by league
       cron.schedule(`${leagueMinuteOffset} 6 * * *`, () => jobRosters(config))
 
-      // Schedule: daily at 5 AM ET, 15 minutes apart by league
-      cron.schedule(`${leagueMinuteOffset} 5 * * *`, () => jobSchedule(config))
+      // Schedule: every 6 hours, 15 minutes apart by league
+      cron.schedule(`${leagueMinuteOffset} 1,7,13,19 * * *`, () => jobSchedule(config))
 
-      console.log(`  - ${config.name}: scores every 10m, odds every 20m, standings/injuries 6h (15m stagger), player stats every 6h, rosters/schedule daily`)
+      console.log(`  - ${config.name}: scores every 10m, odds every 20m, standings/injuries/schedule 6h (15m stagger), player stats every 6h, rosters daily`)
     } else {
       console.log(`  - ${config.name}: odds every 20m (GoalServe jobs disabled; DATA_SOURCE_A not configured)`)
     }
   })
+
+  // Stub enrichment: every 30 minutes, scan for stub events missing team IDs
+  cron.schedule('*/30 * * * *', () => {
+    jobEnrichStubs().catch((e) => console.error('[scheduler] Stub enrichment failed:', e.message))
+  })
+  console.log('  - Stub enrichment: every 30m')
 }
 
 function runInitialFetch(leagues) {
