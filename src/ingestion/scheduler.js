@@ -21,6 +21,7 @@ import { bookmakerSortComparator } from './bookmakerCatalog.js'
 import { buildPlayerPropsDocFromOddsDoc } from '../utils/playerProps.js'
 import { batchGetMoneylineIds, upsertMoneylineIdMapping } from './idMapper.js'
 import { normalizePlayerNameForMatching, enrichPlayerPropsWithIds } from './playerIdentityResolver.js'
+import { isStandardEventId } from '../utils/canonicalEvents.js'
 
 /**
  * Upsert an array of normalized documents into a collection.
@@ -179,10 +180,14 @@ export function matchExistingEventForOddsDoc(oddsDoc, candidateEvents = []) {
     _startDelta: event.startTime instanceof Date ? Math.abs(event.startTime.getTime() - targetTime) : Number.MAX_SAFE_INTEGER,
   }))
 
-  // Prefer canonical events (have homeTeamId from GoalServe) over odds-derived stubs
+  // Prefer canonical GoalServe events (standard leagueId-ev-XXXXX IDs) over odds-derived stubs.
+  // Using eventId format rather than homeTeamId presence as the signal because stubs can now
+  // be enriched with team IDs at creation time, making homeTeamId an unreliable discriminator.
   const preferCanonical = (a, b) => {
-    if (a.homeTeamId && !b.homeTeamId) return -1
-    if (!a.homeTeamId && b.homeTeamId) return 1
+    const aIsCanonical = isStandardEventId(a.eventId)
+    const bIsCanonical = isStandardEventId(b.eventId)
+    if (aIsCanonical && !bIsCanonical) return -1
+    if (!aIsCanonical && bIsCanonical) return 1
     return a._startDelta - b._startDelta
   }
 
@@ -1275,11 +1280,13 @@ async function jobSchedule(config) {
 }
 
 async function jobEnrichStubs() {
-  // Find stub events (created from Odds API data) that are still missing team IDs.
+  // Find odds-derived stub events (leagueId-odds-XXXXX IDs) still missing team IDs.
+  // Restricting to the odds ID pattern avoids accidentally touching canonical GoalServe
+  // events, which should get team IDs via their own ingestion pipeline.
   const stubs = await getCollection('events')
     .find(
       {
-        homeTeamName: { $exists: true },
+        eventId: { $regex: /-odds-/ },
         $or: [{ homeTeamId: { $exists: false } }, { awayTeamId: { $exists: false } }],
       },
       { projection: { _id: 0, eventId: 1, leagueId: 1, homeTeamName: 1, awayTeamName: 1 } }
