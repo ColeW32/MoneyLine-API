@@ -80,7 +80,7 @@ X-RateLimit-Remaining: 42
 X-RateLimit-Reset: 38
 ```
 
-When exceeded, you receive a 429 with `Retry-After: 60`.
+The rate limiter uses a **fixed window** — the window resets at the top of each minute. When exceeded, you receive a 429 with `Retry-After: 60`.
 
 ---
 
@@ -137,6 +137,10 @@ Get a single league by ID.
 
 ### Events & Scores
 
+#### Stub Events
+
+Some events appear in the API before GoalServe has ingested the game. These **stub events** are seeded from Odds API data and carry an `isStub: true` flag. Stubs are enriched with team IDs when available and are automatically replaced by canonical GoalServe events once they are ingested — the `eventId` remains stable through this transition. A daily schedule sync (every 6 hours) and a periodic enrichment job (every 30 minutes) keep stubs up to date. Client code should treat `isStub: true` events as fully usable but potentially missing some boxscore and play-by-play data.
+
 #### GET /v1/events
 List events with filtering and pagination.
 
@@ -172,6 +176,7 @@ Final events also include explicit outcome fields so clients do not need to deri
       "awayTeamName": "Los Angeles Lakers",
       "startTime": "2026-03-09T23:30:00.000Z",
       "status": "final",
+      "isStub": false,
       "scores": { "home": 112, "away": 105 },
       "outcome": "home_win",
       "winnerTeamId": "nba-bos",
@@ -375,6 +380,7 @@ Get stats for a player.
 - `date` cannot be combined with `from` or `to`.
 - `type=career` is not currently supported.
 - Player stats are refreshed daily.
+- `type=game` game log entries include `gameDateDisplay` (formatted date string, e.g. `"Mar 14"`) and `opponentAbbr` (opponent team abbreviation, e.g. `"LAL"`) for display purposes.
 
 ---
 
@@ -386,9 +392,13 @@ Get hit rates for a player against a specific prop line — how often the player
 | Param | Type | Default | Description |
 |-------|------|---------|-------------|
 | market | string | — | **Required.** Prop market key (e.g. `player_points`, `player_assists`, `player_rebounds`) |
-| line | number | — | **Required.** The prop line threshold (e.g. `14.5`) |
+| line | number | — | **Required.** The prop line threshold (e.g. `14.5`). Use `0` for binary yes/no markets (e.g. `player_anytime_td`, `player_anytime_goal_scorer`) |
 
-**Response:**
+**Notes:**
+- Binary yes/no markets (e.g. `player_anytime_td`, `player_anytime_goal_scorer`) use `line=0`. The hit rate reflects how often the player scored/scored a goal in recent games.
+- Some markets cannot be computed from boxscore data. These return `hitRateSupported: false` with no `hitRates` object. Use `GET /v1/player-props/markets` to see which markets are supported.
+
+**Response (standard market):**
 ```json
 {
   "success": true,
@@ -397,12 +407,26 @@ Get hit rates for a player against a specific prop line — how often the player
     "market": "player_points",
     "line": 14.5,
     "direction": "over",
+    "hitRateSupported": true,
     "hitRates": {
       "L5":     { "games": 5,  "hits": 4, "rate": 0.800 },
       "L10":    { "games": 10, "hits": 6, "rate": 0.600 },
       "L25":    { "games": 25, "hits": 15, "rate": 0.600 },
       "season": { "games": 62, "hits": 37, "rate": 0.597 }
     }
+  }
+}
+```
+
+**Response (uncomputable market):**
+```json
+{
+  "success": true,
+  "data": {
+    "playerId": "nfl-p-12345",
+    "market": "player_first_td",
+    "line": 0,
+    "hitRateSupported": false
   }
 }
 ```
@@ -566,11 +590,11 @@ Get an integrated analysis for a player: current best bet, game-by-game chart da
       "window": "l5",
       "line": 14.5,
       "games": [
-        { "gameDate": "2026-03-14T00:00:00.000Z", "opponent": "San Antonio Spurs", "value": 18, "hit": true },
-        { "gameDate": "2026-03-17T00:00:00.000Z", "opponent": "Miami Heat", "value": 24, "hit": true },
-        { "gameDate": "2026-03-19T00:00:00.000Z", "opponent": "Orlando Magic", "value": 27, "hit": true },
-        { "gameDate": "2026-03-21T00:00:00.000Z", "opponent": "Memphis Grizzlies", "value": 12, "hit": false },
-        { "gameDate": "2026-03-24T00:00:00.000Z", "opponent": "Sacramento Kings", "value": 27, "hit": true }
+        { "gameDate": "2026-03-14T00:00:00.000Z", "gameDateDisplay": "Mar 14", "opponent": "San Antonio Spurs", "opponentAbbr": "SAS", "value": 18, "hit": true },
+        { "gameDate": "2026-03-17T00:00:00.000Z", "gameDateDisplay": "Mar 17", "opponent": "Miami Heat", "opponentAbbr": "MIA", "value": 24, "hit": true },
+        { "gameDate": "2026-03-19T00:00:00.000Z", "gameDateDisplay": "Mar 19", "opponent": "Orlando Magic", "opponentAbbr": "ORL", "value": 27, "hit": true },
+        { "gameDate": "2026-03-21T00:00:00.000Z", "gameDateDisplay": "Mar 21", "opponent": "Memphis Grizzlies", "opponentAbbr": "MEM", "value": 12, "hit": false },
+        { "gameDate": "2026-03-24T00:00:00.000Z", "gameDateDisplay": "Mar 24", "opponent": "Sacramento Kings", "opponentAbbr": "SAC", "value": 27, "hit": true }
       ]
     }
   }
@@ -685,6 +709,8 @@ List all tracked sportsbooks, DFS platforms, and exchanges.
   { "bookmakerId": "sporttrade",  "name": "Sporttrade",  "sourceType": "exchange",   "sourceRegion": "us_ex" }
 ]
 ```
+
+**Bookmaker key aliases:** Some bookmakers have alternate keys that map to the canonical ID — e.g. `hardrockbet` is an alias for `hardrock_bet`. Either key is accepted in filter params.
 
 ---
 
