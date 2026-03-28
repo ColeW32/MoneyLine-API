@@ -10,7 +10,7 @@ import {
   getSeasonStartDate,
   getSeasonEndDate,
 } from '../config/sports.js'
-import { fetchScores, fetchStandings, fetchRoster, fetchInjuries } from './fetchers/goalserve.js'
+import { fetchScores, fetchStandings, fetchRoster, fetchInjuries, fetchSchedule } from './fetchers/goalserve.js'
 import { fetchOdds, fetchEventOdds } from './fetchers/oddsApi.js'
 import { getNormalizer } from './normalizers/index.js'
 import { calculateEdges } from './edgeCalculator.js'
@@ -179,15 +179,22 @@ export function matchExistingEventForOddsDoc(oddsDoc, candidateEvents = []) {
     _startDelta: event.startTime instanceof Date ? Math.abs(event.startTime.getTime() - targetTime) : Number.MAX_SAFE_INTEGER,
   }))
 
+  // Prefer canonical events (have homeTeamId from GoalServe) over odds-derived stubs
+  const preferCanonical = (a, b) => {
+    if (a.homeTeamId && !b.homeTeamId) return -1
+    if (!a.homeTeamId && b.homeTeamId) return 1
+    return a._startDelta - b._startDelta
+  }
+
   const exactOrientation = withDistance
     .filter((event) => event._canonicalHome === targetHome && event._canonicalAway === targetAway)
-    .sort((a, b) => a._startDelta - b._startDelta)
+    .sort(preferCanonical)
 
   if (exactOrientation[0]?.eventId) return exactOrientation[0]
 
   const sameTeams = withDistance
     .filter((event) => [event._canonicalHome, event._canonicalAway].sort().join('|') === targetPair)
-    .sort((a, b) => a._startDelta - b._startDelta)
+    .sort(preferCanonical)
 
   return sameTeams[0] || null
 }
@@ -227,12 +234,37 @@ async function resolveCanonicalOddsEventIds(config, oddsDocs = [], knownEventIdM
             $lte: new Date(doc._sourceCommenceTime.getTime() + 12 * 60 * 60 * 1000),
           },
         },
-        { projection: { _id: 0, eventId: 1, homeTeamName: 1, awayTeamName: 1, startTime: 1 } }
+        { projection: { _id: 0, eventId: 1, homeTeamName: 1, awayTeamName: 1, startTime: 1, homeTeamId: 1 } }
       )
       .toArray()
 
     const matched = matchExistingEventForOddsDoc(doc, candidateEvents)
-    if (!matched?.eventId) continue
+    if (!matched?.eventId) {
+      // No existing event — create a stub so this game appears in /events.
+      // The stub uses the odds-derived eventId (already set by normalizeOdds).
+      // Once GoalServe score/schedule data arrives, the next jobOdds run will find
+      // the canonical event (which has homeTeamId) and re-map the odds to it.
+      if (doc._sourceHomeTeam && doc._sourceAwayTeam) {
+        await getCollection('events').updateOne(
+          { eventId: doc.eventId },
+          {
+            $setOnInsert: {
+              eventId: doc.eventId,
+              leagueId: config.leagueId,
+              sport: config.sport,
+              homeTeamName: doc._sourceHomeTeam,
+              awayTeamName: doc._sourceAwayTeam,
+              startTime: doc._sourceCommenceTime,
+              status: 'scheduled',
+              sourceUpdatedAt: new Date(),
+              updatedAt: new Date(),
+            },
+          },
+          { upsert: true }
+        )
+      }
+      continue
+    }
 
     doc.eventId = matched.eventId
     if (sourceEventId) {
@@ -1163,6 +1195,10 @@ async function jobOdds(config) {
     }
 
     if (originalEventId !== o.eventId) {
+      // If the old ID was an odds-derived stub, clean it up from events too
+      if (originalEventId.startsWith(`${o.leagueId}-odds-`)) {
+        await getCollection('events').deleteOne({ eventId: originalEventId })
+      }
       await getCollection('odds').deleteOne({ eventId: originalEventId })
       await getCollection('player_props').deleteOne({ eventId: originalEventId })
       await getCollection('edge_data').deleteOne({ eventId: originalEventId })
@@ -1174,6 +1210,47 @@ async function jobOdds(config) {
   await calculateEdges(config.leagueId, config.sport)
   await calculateBestBets(config.leagueId, config.sport)
   await calculateHitRates(config.leagueId)
+}
+
+async function jobSchedule(config) {
+  if (!hasGoalserveConfig()) return
+
+  const tag = config.leagueId.toUpperCase()
+  console.log(`[scheduler] Running ${tag} schedule job...`)
+
+  const raw = await fetchSchedule(config)
+  if (!raw) return
+
+  // GoalServe schedule endpoints return data under a 'schedules' root key
+  // (distinct from the 'scores' root used by the livescore endpoint).
+  // Remap to { scores: ... } so we can reuse the existing normalizeScores logic.
+  const schedulesRoot = raw.schedules ?? raw.schedule
+  if (!schedulesRoot?.category?.match) {
+    console.log(`[scheduler] ${tag} schedule: no matches in response`)
+    return
+  }
+
+  const normalizer = getNormalizer(config.leagueId)
+  const events = await normalizer.normalizeScores({ scores: schedulesRoot })
+  if (events.length === 0) return
+
+  // Only write upcoming games — avoid overwriting in-progress or final records
+  // with stale schedule data.
+  const now = new Date()
+  const upcoming = events.filter((e) => e.startTime > now && e.status !== 'final' && e.status !== 'in_progress')
+
+  const ops = upcoming.map((e) => ({
+    updateOne: {
+      filter: { eventId: e.eventId, status: { $nin: ['in_progress', 'final'] } },
+      update: { $set: { ...e, updatedAt: new Date() } },
+      upsert: true,
+    },
+  }))
+
+  if (ops.length > 0) {
+    await getCollection('events').bulkWrite(ops, { ordered: false })
+  }
+  console.log(`[scheduler] Upserted ${ops.length} ${tag} scheduled events`)
 }
 
 // --- Schedule setup ---
@@ -1208,10 +1285,13 @@ function registerLeagueSchedules(leagues) {
       // Player stats: every 6 hours, 15 minutes apart by league
       cron.schedule(`${leagueMinuteOffset} 2,8,14,20 * * *`, () => jobPlayerStats(config))
 
-      // Rosters: daily at 6 AM, 15 minutes apart by league
+      // Rosters: daily at 6 AM ET, 15 minutes apart by league
       cron.schedule(`${leagueMinuteOffset} 6 * * *`, () => jobRosters(config))
 
-      console.log(`  - ${config.name}: scores every 10m, odds every 20m, standings/injuries 6h (15m stagger), player stats every 6h, rosters daily`)
+      // Schedule: daily at 5 AM ET, 15 minutes apart by league
+      cron.schedule(`${leagueMinuteOffset} 5 * * *`, () => jobSchedule(config))
+
+      console.log(`  - ${config.name}: scores every 10m, odds every 20m, standings/injuries 6h (15m stagger), player stats every 6h, rosters/schedule daily`)
     } else {
       console.log(`  - ${config.name}: odds every 20m (GoalServe jobs disabled; DATA_SOURCE_A not configured)`)
     }
