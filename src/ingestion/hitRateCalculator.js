@@ -143,6 +143,45 @@ export const MARKET_TO_STAT_FIELDS = {
 }
 
 /**
+ * Markets where hit-rate computation is not possible from boxscore totals because
+ * they depend on in-game ordering (first/last event) or proprietary scoring formulas.
+ * getStatFields() returns null for these, but callers should use isHitRateComputable()
+ * to distinguish "not computable" from "not yet mapped".
+ */
+export const UNCOMPUTABLE_MARKETS = {
+  nba: new Set([
+    'player_first_basket',
+    'player_first_team_basket',
+    'player_method_of_first_basket',
+    'player_double_double',
+    'player_triple_double',
+    'player_fantasy_points',
+    'player_fantasy_points_alternate',
+  ]),
+  nhl: new Set([
+    'player_goal_scorer_first',
+    'player_goal_scorer_last',
+  ]),
+  nfl: new Set([
+    'player_1st_td',
+    'player_last_td',
+  ]),
+  mlb: new Set([
+    'batter_first_home_run',
+    'pitcher_record_a_win',
+  ]),
+}
+
+/**
+ * Returns false if the market is explicitly known to be uncomputable from boxscore
+ * data (e.g. first-scorer, last-scorer, fantasy points). Returns true if the market
+ * has a stat mapping OR is simply not yet mapped (unknown market).
+ */
+export function isHitRateComputable(leagueId, market) {
+  return !UNCOMPUTABLE_MARKETS[leagueId]?.has(market)
+}
+
+/**
  * Get the stat fields for a market in a league. Returns null if not mapped.
  */
 export function getStatFields(leagueId, market) {

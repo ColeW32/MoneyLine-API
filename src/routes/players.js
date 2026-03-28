@@ -6,6 +6,7 @@ import {
   computeHitRates,
   getHitRateSchemaVersion,
   getStatFields,
+  isHitRateComputable,
   sumStatFieldsForGame,
 } from '../ingestion/hitRateCalculator.js'
 import { americanToDecimal } from '../utils/odds.js'
@@ -289,7 +290,30 @@ export default async function playerRoutes(fastify) {
       .sort(statType === 'game' ? { gameDate: -1, updatedAt: -1 } : { season: -1, updatedAt: -1 })
       .toArray()
 
-    return success(stats, {
+    let enrichedStats = stats
+    if (statType === 'game' && stats.length > 0) {
+      // Build opponent name → abbreviation map with a single teams query
+      const opponentNames = [...new Set(stats.map((s) => s.opponent).filter(Boolean))]
+      const teamDocs = opponentNames.length > 0
+        ? await getCollection('teams')
+            .find(
+              { leagueId: player.leagueId, name: { $in: opponentNames } },
+              { projection: { _id: 0, name: 1, abbreviation: 1 } }
+            )
+            .toArray()
+        : []
+      const abbrByName = new Map(teamDocs.map((t) => [t.name, t.abbreviation]))
+
+      enrichedStats = stats.map((s) => ({
+        ...s,
+        gameDateDisplay: s.gameDate
+          ? s.gameDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
+          : null,
+        opponentAbbr: s.opponent ? (abbrByName.get(s.opponent) ?? null) : null,
+      }))
+    }
+
+    return success(enrichedStats, {
       player: playerId,
       type: statType,
       count: stats.length,
@@ -316,6 +340,13 @@ export default async function playerRoutes(fastify) {
 
     if (!player) {
       return reply.code(404).send(error(`Player '${playerId}' not found.`, 404))
+    }
+
+    if (!isHitRateComputable(player.leagueId, market)) {
+      return success(
+        { playerId, market, hitRateSupported: false, reason: 'Market depends on in-game ordering or proprietary formulas — not computable from boxscore totals.' },
+        { league: player.leagueId }
+      )
     }
 
     const fields = getStatFields(player.leagueId, market)

@@ -1,5 +1,10 @@
 import { getCollection } from '../db.js'
 import { success, error } from '../utils/response.js'
+import { isStandardEventId } from '../utils/canonicalEvents.js'
+
+function addStubFlag(event) {
+  return { ...event, isStub: !isStandardEventId(event.eventId) }
+}
 
 const EVENT_TIMEZONE = 'America/New_York'
 const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/
@@ -109,7 +114,7 @@ export default async function eventRoutes(fastify) {
       getCollection('events').countDocuments(filter),
     ])
 
-    return success(events, {
+    return success(events.map(addStubFlag), {
       count: events.length,
       total,
       page: pageNum,
@@ -128,7 +133,7 @@ export default async function eventRoutes(fastify) {
       .sort({ startTime: -1 })
       .toArray()
 
-    return success(events, { count: events.length })
+    return success(events.map(addStubFlag), { count: events.length })
   })
 
   // GET /v1/events/today — today's games
@@ -144,7 +149,7 @@ export default async function eventRoutes(fastify) {
       .sort({ startTime: 1 })
       .toArray()
 
-    return success(events, { count: events.length, date, timeZone: EVENT_TIMEZONE })
+    return success(events.map(addStubFlag), { count: events.length, date, timeZone: EVENT_TIMEZONE })
   })
 
   // GET /v1/events/:eventId — single event
@@ -159,7 +164,7 @@ export default async function eventRoutes(fastify) {
       return reply.code(404).send(error(`Event '${eventId}' not found.`, 404))
     }
 
-    return success(event, { league: event.leagueId })
+    return success(addStubFlag(event), { league: event.leagueId })
   })
 
   // GET /v1/events/:eventId/play-by-play (pro+)
@@ -192,7 +197,7 @@ export default async function eventRoutes(fastify) {
       .sort({ startTime: 1 })
       .toArray()
 
-    return success(events, {
+    return success(events.map(addStubFlag), {
       league: leagueId,
       date: range.date,
       timeZone: EVENT_TIMEZONE,
