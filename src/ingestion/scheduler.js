@@ -224,8 +224,14 @@ async function resolveCanonicalOddsEventIds(config, oddsDocs = [], knownEventIdM
   for (const doc of oddsDocs) {
     const sourceEventId = doc?._sourceEventId ? String(doc._sourceEventId) : null
     if (sourceEventId && knownEventIdMap.has(sourceEventId)) {
-      doc.eventId = knownEventIdMap.get(sourceEventId)
-      continue
+      const mappedId = knownEventIdMap.get(sourceEventId)
+      // If the cached mapping points to a canonical event, fast-path.
+      // If it points to a stub (-odds-), fall through to matching logic so we
+      // can detect when GoalServe has since created a canonical event for this game.
+      if (!mappedId.includes('-odds-')) {
+        doc.eventId = mappedId
+        continue
+      }
     }
 
     if (!(doc?._sourceCommenceTime instanceof Date) || Number.isNaN(doc._sourceCommenceTime.getTime())) {
@@ -1238,6 +1244,76 @@ async function jobOdds(config) {
   await calculateHitRates(config.leagueId)
 }
 
+/**
+ * Safety-net cleanup: find any stub events (nba-odds-*) that have a canonical
+ * GoalServe event for the same game, then re-point all associated data to the
+ * canonical event and delete the stub.
+ *
+ * This catches cases where the odds→canonical re-mapping was missed (e.g. the
+ * mapping cache pointed to the stub before GoalServe data arrived).
+ */
+async function jobCleanupStubDuplicates(config) {
+  const { leagueId } = config
+  const stubPrefix = `${leagueId}-odds-`
+
+  const stubs = await getCollection('events')
+    .find(
+      { leagueId, eventId: { $regex: `^${stubPrefix}` } },
+      { projection: { _id: 0, eventId: 1, homeTeamName: 1, awayTeamName: 1, startTime: 1 } }
+    )
+    .toArray()
+
+  if (stubs.length === 0) return
+
+  let cleaned = 0
+  for (const stub of stubs) {
+    if (!stub.startTime) continue
+
+    const windowMs = 12 * 60 * 60 * 1000
+    const canonical = await getCollection('events').findOne({
+      leagueId,
+      eventId: { $not: { $regex: `^${stubPrefix}` } },
+      homeTeamId: { $exists: true },
+      startTime: {
+        $gte: new Date(stub.startTime.getTime() - windowMs),
+        $lte: new Date(stub.startTime.getTime() + windowMs),
+      },
+    }, { projection: { _id: 0, eventId: 1, homeTeamName: 1, awayTeamName: 1 } })
+
+    if (!canonical) continue
+
+    // Verify team names match before re-pointing
+    const stubHome = canonicalizeTeamNameForMatching(stub.homeTeamName)
+    const stubAway = canonicalizeTeamNameForMatching(stub.awayTeamName)
+    const canHome = canonicalizeTeamNameForMatching(canonical.homeTeamName)
+    const canAway = canonicalizeTeamNameForMatching(canonical.awayTeamName)
+    const stubPair = [stubHome, stubAway].sort().join('|')
+    const canPair = [canHome, canAway].sort().join('|')
+    if (stubPair !== canPair) continue
+
+    // Re-point odds, player_props, edge_data, best_bets to canonical event
+    for (const col of ['odds', 'player_props', 'edge_data', 'best_bets']) {
+      const existing = await getCollection(col).findOne({ eventId: stub.eventId })
+      if (existing) {
+        const { _id: _unusedId, eventId: _unusedEventId, ...rest } = existing
+        await getCollection(col).updateOne(
+          { eventId: canonical.eventId },
+          { $set: { ...rest, eventId: canonical.eventId } },
+          { upsert: true }
+        )
+        await getCollection(col).deleteOne({ eventId: stub.eventId })
+      }
+    }
+
+    await getCollection('events').deleteOne({ eventId: stub.eventId })
+    cleaned += 1
+  }
+
+  if (cleaned > 0) {
+    console.log(`[scheduler] Cleaned up ${cleaned} orphaned stub event(s) for ${leagueId.toUpperCase()}`)
+  }
+}
+
 async function jobSchedule(config) {
   if (!hasGoalserveConfig()) return
 
@@ -1392,6 +1468,18 @@ function registerLeagueSchedules(leagues) {
     } else {
       console.log(`  - ${config.name}: odds every 20m (GoalServe jobs disabled; DATA_SOURCE_A not configured)`)
     }
+
+    // Stub duplicate cleanup: hourly, staggered by league.
+    // Runs regardless of GoalServe config as a safety net.
+    {
+      const cleanupMin = (offset + 45) % 60
+      cron.schedule(`${cleanupMin} * * * *`, () =>
+        jobCleanupStubDuplicates(config).catch((e) =>
+          console.error(`[scheduler] ${config.leagueId.toUpperCase()} stub cleanup failed:`, e.message)
+        )
+      )
+    }
+
   })
 
   // Stub enrichment: every 30 minutes, scan for stub events missing team IDs
@@ -1414,6 +1502,7 @@ function runInitialFetch(leagues) {
       jobStandings(config).catch((e) => console.error(`[scheduler] Initial ${leagueId} standings failed:`, e.message))
     }
     jobOdds(config).catch((e) => console.error(`[scheduler] Initial ${leagueId} odds failed:`, e.message))
+    jobCleanupStubDuplicates(config).catch((e) => console.error(`[scheduler] Initial ${leagueId} stub cleanup failed:`, e.message))
   }
 }
 
