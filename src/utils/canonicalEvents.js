@@ -14,11 +14,11 @@ export function isStandardEventId(eventId, leagueId = null) {
 }
 
 export async function hasCanonicalEvent(eventId) {
-  if (!isStandardEventId(eventId)) return false
-
   if (!eventId) return false
+  const normalized = String(eventId).trim()
+  if (!normalized || /undefined|null|nan/i.test(normalized)) return false
   const event = await getCollection('events').findOne(
-    { eventId },
+    { eventId: normalized },
     { projection: { _id: 1 } }
   )
   return Boolean(event)
@@ -49,13 +49,6 @@ export async function findValidEventIdsByCollection(collectionName, {
               $expr: { $eq: ['$eventId', '$$localEventId'] },
               ...(league ? { leagueId: league } : {}),
               ...(activeOnly ? { status: { $in: ACTIVE_BULK_EVENT_STATUSES } } : {}),
-            },
-          },
-          {
-            $match: {
-              eventId: league
-                ? new RegExp(`^${league}-ev-[a-z0-9]+$`, 'i')
-                : STANDARD_EVENT_ID_PATTERN,
             },
           },
           { $project: { _id: 0, eventId: 1, startTime: 1, status: 1 } },
