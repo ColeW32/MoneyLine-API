@@ -53,6 +53,13 @@ Stub cleanup logic lives in `ingestion/scheduler.js`. The deduplication key is (
 
 `ingestion/bookmakerCatalog.js` maps raw Odds API bookmaker keys to canonical `bookmakerId` values. Aliases are supported — e.g. `hardrockbet` maps to `hardrock_bet`. When filtering by bookmaker in any endpoint, both the canonical key and any alias are accepted.
 
+## Edge calculator
+
+`ingestion/edgeCalculator.js` computes arbitrage, value, and EV edges.
+
+- **DFS excluded from arbitrage**: DFS operators (`sourceType: 'dfs'` — PrizePicks, Underdog, DraftKings Pick6, Betr Picks) are excluded from arbitrage calculations. Their prices are normalized into American odds but are indicative, not tradeable lines, so including them produces false arbitrage signals. DFS is still included in value and EV calculations.
+- Exchange participation in arbitrage is limited to the `ARBITRAGE_EXCHANGE_ALLOWLIST` (ProphetX, Novig), and all exchange offers are sanity-checked against a sportsbook-only consensus before they can form arb legs.
+
 ## Game log fields
 
 When returning `type=game` player stats, each game log entry includes:
