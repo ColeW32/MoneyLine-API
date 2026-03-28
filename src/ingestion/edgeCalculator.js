@@ -123,6 +123,9 @@ function collectPropositions(bookmakers) {
 
 function isArbitrageEligibleBookmaker(bookmaker) {
   if (!bookmaker?.sourceType || bookmaker.sourceType === 'unknown') return false
+  // DFS prices are normalized into American odds but are indicative, not tradeable lines.
+  // Excluding them prevents false arbitrage signals from DFS multiplier-based pricing.
+  if (bookmaker.sourceType === 'dfs') return false
   if (bookmaker.sourceType !== 'exchange') return true
   return ARBITRAGE_EXCHANGE_ALLOWLIST.has(String(bookmaker.bookmakerId || '').toLowerCase())
 }
@@ -131,7 +134,7 @@ function buildArbitrageReferenceProbabilities(bookmakers) {
   const referenceProbabilities = new Map()
 
   for (const bookmaker of bookmakers) {
-    if (!bookmaker?.sourceType || bookmaker.sourceType === 'unknown' || bookmaker.sourceType === 'exchange') continue
+    if (!bookmaker?.sourceType || bookmaker.sourceType === 'unknown' || bookmaker.sourceType === 'exchange' || bookmaker.sourceType === 'dfs') continue
 
     for (const market of bookmaker.markets || []) {
       for (const outcome of market.outcomes || []) {
