@@ -49,6 +49,8 @@ export const MARKET_TO_STAT_FIELDS = {
     player_blocked_shots:                 ['skater.blocked_shots'],
     player_power_play_points:             ['skater.pp_goals', 'skater.pp_assists'],
     player_total_saves:                   ['goalkeeping.saves'],
+    // Yes/no markets: hit = player achieved stat > 0 (use line=0)
+    player_goal_scorer_anytime:           ['skater.goals'],
     player_shots_on_goal_alternate:       ['skater.shots_on_goal'],
     player_goals_alternate:               ['skater.goals'],
     player_points_alternate:              ['skater.goals', 'skater.assists'],
@@ -112,6 +114,9 @@ export const MARKET_TO_STAT_FIELDS = {
     player_sacks:                  ['defensive.sacks.count', 'passing.sacks.count'],
     player_solo_tackles:           ['defensive.tackles'],
     player_tackles_assists:        ['defensive.tackles', 'defensive.assists'],
+    // Yes/no and over_only markets: hit = player scored any TD (> 0)
+    player_anytime_td:             ['rushing.rushing_touch_downs', 'receiving.receiving_touch_downs', 'passing.passing_touch_downs'],
+    player_tds_over:               ['rushing.rushing_touch_downs', 'receiving.receiving_touch_downs', 'passing.passing_touch_downs'],
     player_pass_yds_alternate:     ['passing.yards'],
     player_pass_tds_alternate:     ['passing.passing_touch_downs'],
     player_pass_attempts_alternate:['passing.comp_att.attempts'],
@@ -320,14 +325,16 @@ export async function calculateHitRates(leagueId) {
         if (!fields) continue
 
         for (const lineEntry of marketEntry.lines || []) {
-          if (lineEntry.point == null) continue
-          const key = `${player.playerId}:${marketEntry.marketType}:${lineEntry.point}`
+          // Yes/no markets (e.g. player_goal_scorer_anytime) have point=null.
+          // Treat them as line=0: hit = stat > 0 (did the player achieve the outcome).
+          const effectiveLine = lineEntry.point ?? 0
+          const key = `${player.playerId}:${marketEntry.marketType}:${effectiveLine}`
           if (!computations.has(key)) {
             computations.set(key, {
               playerId: player.playerId,
               leagueId,
               market: marketEntry.marketType,
-              line: lineEntry.point,
+              line: effectiveLine,
               fields,
             })
           }

@@ -61,6 +61,47 @@ test('sumStatFieldsForGame supports nested and derived stat fields', () => {
   assert.equal(mlbSingles, 1)
 })
 
+test('getStatFields returns mapping for NHL player_goal_scorer_anytime yes/no market', () => {
+  const fields = getStatFields('nhl', 'player_goal_scorer_anytime')
+  assert.deepEqual(fields, ['skater.goals'])
+})
+
+test('computeHitRates works for NHL yes/no anytime goal scorer using line=0', () => {
+  // Simulates the hit rate calculation for "Anytime Goal Scorer" prop.
+  // A player "hits" the prop if they scored at least 1 goal (goals > 0).
+  const games = [
+    { season: '2025-26', stats: { skater: { goals: 1, assists: 0 } } }, // scored
+    { season: '2025-26', stats: { skater: { goals: 0, assists: 1 } } }, // did not score
+    { season: '2025-26', stats: { skater: { goals: 2, assists: 0 } } }, // scored
+    { season: '2025-26', stats: { skater: { goals: 0, assists: 0 } } }, // did not score
+    { season: '2025-26', stats: { skater: { goals: 1, assists: 1 } } }, // scored
+  ]
+
+  const fields = getStatFields('nhl', 'player_goal_scorer_anytime')
+  const rates = computeHitRates(games, fields, 0, 'over', '2025-26')
+
+  assert.deepEqual(rates.L5, { games: 5, hits: 3, rate: 0.6 })
+  assert.deepEqual(rates.season, { games: 5, hits: 3, rate: 0.6 })
+})
+
+test('getStatFields returns mapping for NFL player_anytime_td yes/no market', () => {
+  const fields = getStatFields('nfl', 'player_anytime_td')
+  assert.deepEqual(fields, ['rushing.rushing_touch_downs', 'receiving.receiving_touch_downs', 'passing.passing_touch_downs'])
+})
+
+test('computeHitRates works for NFL anytime TD using line=0', () => {
+  const games = [
+    { season: '2025-26', stats: { rushing: { rushing_touch_downs: 1 }, receiving: { receiving_touch_downs: 0 }, passing: { passing_touch_downs: 0 } } },
+    { season: '2025-26', stats: { rushing: { rushing_touch_downs: 0 }, receiving: { receiving_touch_downs: 0 }, passing: { passing_touch_downs: 0 } } },
+    { season: '2025-26', stats: { rushing: { rushing_touch_downs: 0 }, receiving: { receiving_touch_downs: 1 }, passing: { passing_touch_downs: 0 } } },
+  ]
+
+  const fields = getStatFields('nfl', 'player_anytime_td')
+  const rates = computeHitRates(games, fields, 0, 'over', '2025-26')
+
+  assert.deepEqual(rates.L5, { games: 3, hits: 2, rate: 0.667 })
+})
+
 test('computeHitRates supports under direction', () => {
   const games = [
     { season: '2025-26', stats: { points: 18 } },
